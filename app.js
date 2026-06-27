@@ -339,16 +339,16 @@ function parseCSVLine(line) {
 function parseDate(raw) {
   const cleaned = raw.replace(/['"]/g, "").trim();
 
-  // yyyy-mm-dd or yyyy/mm/dd
-  let m = cleaned.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
+  // yyyy-mm-dd with optional time (e.g. 2026-05-01 03:57)
+  let m = cleaned.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
   if (m) return `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`;
 
-  // dd-mm-yyyy or dd/mm/yyyy
-  m = cleaned.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+  // dd-mm-yyyy or dd/mm/yyyy with optional time
+  m = cleaned.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
   if (m) return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
 
   // dd Mon yyyy or dd-Mon-yyyy (e.g. 15 Jun 2025, 15-Jun-2025)
-  m = cleaned.match(/^(\d{1,2})[\s-](\w{3,9})[\s-](\d{4})$/);
+  m = cleaned.match(/^(\d{1,2})[\s-](\w{3,9})[\s-](\d{4})/);
   if (m) {
     const months = { jan:1, feb:2, mar:3, apr:4, may:5, jun:6, jul:7, aug:8, sep:9, oct:10, nov:11, dec:12,
       january:1, february:2, march:3, april:4, june:6, july:7, august:8, september:9, october:10, november:11, december:12 };
@@ -359,34 +359,29 @@ function parseDate(raw) {
   return null;
 }
 
-function detectColumns(headers, firstRow) {
-  const h = headers.map((s) => s.toLowerCase().replace(/[^a-z0-9]/g, ""));
+function detectColumns(headers) {
+  const h = headers.map((s) => s.toLowerCase().trim());
 
-  let dateCol = -1, descCol = -1, amountCol = -1, debitCol = -1, creditCol = -1;
+  let dateCol = -1, descCol = -1, amountCol = -1;
+  let moneyOutCol = -1, moneyInCol = -1, feeCol = -1;
+  let debitCol = -1, creditCol = -1;
+  let categoryCol = -1, parentCategoryCol = -1;
 
   h.forEach((col, i) => {
-    if (dateCol === -1 && (col.includes("date") || col.includes("transactiondate") || col.includes("posteddate"))) dateCol = i;
-    if (descCol === -1 && (col.includes("description") || col.includes("desc") || col.includes("narrative") || col.includes("detail") || col.includes("reference"))) descCol = i;
-    if (col === "amount" || col === "transactionamount") amountCol = i;
-    if (col.includes("debit")) debitCol = i;
-    if (col.includes("credit")) creditCol = i;
+    const norm = col.replace(/[^a-z0-9 ]/g, "").trim();
+    if (dateCol === -1 && (norm.includes("posting date") || norm.includes("transaction date") || norm === "date")) dateCol = i;
+    if (descCol === -1 && (norm === "description" || norm.includes("narrative") || norm.includes("detail"))) descCol = i;
+    if (norm === "amount" || norm === "transaction amount") amountCol = i;
+    if (norm === "money out") moneyOutCol = i;
+    if (norm === "money in") moneyInCol = i;
+    if (norm === "fee") feeCol = i;
+    if (norm === "debit") debitCol = i;
+    if (norm === "credit") creditCol = i;
+    if (norm === "category") categoryCol = i;
+    if (norm === "parent category") parentCategoryCol = i;
   });
 
-  // Fallback: try to detect from data if headers didn't match
-  if (dateCol === -1 || descCol === -1) {
-    firstRow.forEach((val, i) => {
-      if (dateCol === -1 && parseDate(val)) dateCol = i;
-    });
-    if (descCol === -1) {
-      firstRow.forEach((val, i) => {
-        if (i !== dateCol && i !== amountCol && i !== debitCol && i !== creditCol && val.length > 3 && !parseDate(val) && isNaN(parseFloat(val.replace(/[^0-9.-]/g, "")))) {
-          descCol = i;
-        }
-      });
-    }
-  }
-
-  return { dateCol, descCol, amountCol, debitCol, creditCol };
+  return { dateCol, descCol, amountCol, moneyOutCol, moneyInCol, feeCol, debitCol, creditCol, categoryCol, parentCategoryCol };
 }
 
 function parseAmount(raw) {
@@ -396,17 +391,35 @@ function parseAmount(raw) {
   return isNaN(num) ? null : num;
 }
 
+function mapBankCategory(bankCategory) {
+  if (!bankCategory) return null;
+  const lower = bankCategory.toLowerCase().trim();
+  const mapping = {
+    "food": "Food", "groceries": "Food", "restaurant": "Food", "fast food": "Food", "takeout": "Food",
+    "transport": "Transport", "fuel": "Transport", "parking": "Transport", "tolls": "Transport", "ride hailing": "Transport",
+    "housing": "Housing", "rent": "Housing", "mortgage": "Housing", "property": "Housing",
+    "utilities": "Utilities", "electricity": "Utilities", "water": "Utilities",
+    "internet": "Utilities", "cellphone": "Utilities", "communication": "Utilities", "mobile": "Utilities",
+    "entertainment": "Entertainment", "digital subscriptions": "Entertainment", "streaming": "Entertainment", "online store": "Entertainment",
+    "shopping": "Shopping", "clothing": "Shopping", "retail": "Shopping",
+    "medical": "Health", "medical aid": "Health", "pharmacy": "Health", "health": "Health",
+    "education": "Education", "tuition": "Education", "school": "Education",
+    "fees": "Other", "transfer": "Other", "loans": "Other", "loan": "Other",
+    "legal fees": "Other", "personal & family": "Other", "interest": "Other",
+  };
+  return mapping[lower] || null;
+}
+
 function processCSV(text) {
   const lines = text.split(/\r?\n/).filter((l) => l.trim());
   if (lines.length < 2) return [];
 
-  // Skip leading info lines that some banks add before the actual CSV headers
   let headerIndex = 0;
   for (let i = 0; i < Math.min(lines.length, 10); i++) {
     const fields = parseCSVLine(lines[i]);
     if (fields.length >= 3) {
       const lower = fields.map((f) => f.toLowerCase()).join(" ");
-      if (lower.includes("date") || lower.includes("description") || lower.includes("amount") || lower.includes("debit") || lower.includes("narrative")) {
+      if (lower.includes("date") || lower.includes("description") || lower.includes("amount") || lower.includes("debit") || lower.includes("money") || lower.includes("narrative")) {
         headerIndex = i;
         break;
       }
@@ -417,11 +430,22 @@ function processCSV(text) {
   const dataLines = lines.slice(headerIndex + 1);
   if (dataLines.length === 0) return [];
 
-  const firstDataRow = parseCSVLine(dataLines[0]);
-  const cols = detectColumns(headers, firstDataRow);
+  const cols = detectColumns(headers);
 
-  if (cols.dateCol === -1 || cols.descCol === -1) return [];
-  if (cols.amountCol === -1 && cols.debitCol === -1) return [];
+  if (cols.dateCol === -1 && cols.descCol === -1) {
+    // No headers matched — try treating first row as data, detect date columns from values
+    const firstRow = parseCSVLine(lines[0]);
+    let fallbackDateCol = -1;
+    firstRow.forEach((val, i) => { if (fallbackDateCol === -1 && parseDate(val)) fallbackDateCol = i; });
+    if (fallbackDateCol === -1) return [];
+  }
+
+  // Must have at least a date column
+  if (cols.dateCol === -1) return [];
+
+  // Must have some amount column
+  const hasAmounts = cols.amountCol !== -1 || cols.moneyOutCol !== -1 || cols.debitCol !== -1 || cols.feeCol !== -1;
+  if (!hasAmounts && cols.descCol === -1) return [];
 
   const results = [];
   for (const line of dataLines) {
@@ -431,26 +455,52 @@ function processCSV(text) {
     const date = parseDate(fields[cols.dateCol] || "");
     if (!date) continue;
 
-    const description = fields[cols.descCol] || "";
-    if (!description.trim()) continue;
+    const description = (cols.descCol !== -1 ? fields[cols.descCol] : "").trim();
+    if (!description) continue;
 
-    let amount = null;
-    if (cols.amountCol !== -1) {
-      amount = parseAmount(fields[cols.amountCol]);
-      if (amount !== null) amount = Math.abs(amount);
+    // Calculate total expense: Money Out + Fee, or Amount, or Debit
+    let amount = 0;
+    if (cols.moneyOutCol !== -1) {
+      const out = parseAmount(fields[cols.moneyOutCol]);
+      if (out) amount += Math.abs(out);
     }
-    if ((amount === null || amount === 0) && cols.debitCol !== -1) {
-      amount = parseAmount(fields[cols.debitCol]);
-      if (amount !== null) amount = Math.abs(amount);
+    if (cols.feeCol !== -1) {
+      const fee = parseAmount(fields[cols.feeCol]);
+      if (fee) amount += Math.abs(fee);
     }
-    // Skip credit-only rows (money coming in, not expenses)
-    if (amount === null || amount === 0) continue;
+    if (amount === 0 && cols.amountCol !== -1) {
+      const amt = parseAmount(fields[cols.amountCol]);
+      if (amt) amount = Math.abs(amt);
+    }
+    if (amount === 0 && cols.debitCol !== -1) {
+      const deb = parseAmount(fields[cols.debitCol]);
+      if (deb) amount = Math.abs(deb);
+    }
+
+    // Skip rows with no expense amount (income-only, declined transactions)
+    if (amount === 0) {
+      // Check if it's income-only (Money In with no Money Out/Fee)
+      if (cols.moneyInCol !== -1 && parseAmount(fields[cols.moneyInCol])) continue;
+      continue;
+    }
+
+    // Use bank's category if available, fall back to keyword matching
+    let category = null;
+    if (cols.categoryCol !== -1) {
+      category = mapBankCategory(fields[cols.categoryCol]);
+    }
+    if (!category && cols.parentCategoryCol !== -1) {
+      category = mapBankCategory(fields[cols.parentCategoryCol]);
+    }
+    if (!category) {
+      category = categorizeDescription(description);
+    }
 
     results.push({
       date,
-      description: description.trim(),
+      description,
       amount,
-      category: categorizeDescription(description),
+      category,
       selected: true,
     });
   }
