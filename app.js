@@ -190,8 +190,12 @@ const categoryBreakdown = document.getElementById("category-breakdown");
 const filterSource = document.getElementById("filter-source");
 const listActions = document.getElementById("list-actions");
 const selectedInfo = document.getElementById("selected-info");
-const deleteFilteredBtn = document.getElementById("delete-filtered-btn");
+const deleteSelectedBtn = document.getElementById("delete-selected-btn");
+const selectAllExpenses = document.getElementById("select-all-expenses");
+const insightsSection = document.getElementById("insights-section");
+const insightsContent = document.getElementById("insights-content");
 let activeSource = "all";
+let selectedIds = new Set();
 
 function updateSummary() {
   const today = getToday();
@@ -287,6 +291,24 @@ function getFilteredExpenses() {
     .sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
 }
 
+function updateSelectionInfo() {
+  const filtered = getFilteredExpenses();
+  const selCount = filtered.filter((e) => selectedIds.has(e.id)).length;
+  const total = filtered.reduce((s, e) => s + e.amount, 0);
+
+  if (selCount > 0) {
+    const selTotal = filtered.filter((e) => selectedIds.has(e.id)).reduce((s, e) => s + e.amount, 0);
+    selectedInfo.textContent = `${selCount} of ${filtered.length} selected (${formatCurrency(selTotal)})`;
+    deleteSelectedBtn.style.display = "";
+    deleteSelectedBtn.textContent = `Delete ${selCount} selected`;
+  } else {
+    selectedInfo.textContent = `${filtered.length} expenses — ${formatCurrency(total)}`;
+    deleteSelectedBtn.style.display = "none";
+  }
+
+  selectAllExpenses.checked = filtered.length > 0 && filtered.every((e) => selectedIds.has(e.id));
+}
+
 function renderExpenses() {
   const filtered = getFilteredExpenses();
 
@@ -298,15 +320,13 @@ function renderExpenses() {
   }
 
   noExpenses.style.display = "none";
-
-  const total = filtered.reduce((s, e) => s + e.amount, 0);
   listActions.style.display = "flex";
-  selectedInfo.textContent = `${filtered.length} expenses — ${formatCurrency(total)}`;
 
   expensesBody.innerHTML = filtered
     .map(
       (e) => `
-    <tr>
+    <tr class="${selectedIds.has(e.id) ? "row-selected" : ""}">
+      <td><input type="checkbox" class="expense-check" data-id="${e.id}" ${selectedIds.has(e.id) ? "checked" : ""}></td>
       <td class="expense-date">${formatDate(e.date)}</td>
       <td>${escapeHtml(e.description)}</td>
       <td><span class="category-tag" style="background: ${CATEGORY_COLORS[e.category] || "#6b7280"}20; color: ${CATEGORY_COLORS[e.category] || "#6b7280"}">${e.category}</span></td>
@@ -316,14 +336,18 @@ function renderExpenses() {
     </tr>`
     )
     .join("");
+
+  updateSelectionInfo();
 }
 
 function refresh() {
   saveExpenses(expenses);
+  selectedIds.clear();
   updateSummary();
   updateMonthFilter();
   updateSourceFilter();
   updateCategoryBreakdown();
+  generateInsights();
   renderExpenses();
 }
 
@@ -347,34 +371,220 @@ form.addEventListener("submit", (e) => {
 
 expensesBody.addEventListener("click", (e) => {
   const btn = e.target.closest(".btn-delete");
-  if (!btn) return;
-  expenses = expenses.filter((exp) => exp.id !== btn.dataset.id);
+  if (btn) {
+    expenses = expenses.filter((exp) => exp.id !== btn.dataset.id);
+    selectedIds.delete(btn.dataset.id);
+    refresh();
+    return;
+  }
+
+  const chk = e.target.closest(".expense-check");
+  if (chk) {
+    const id = chk.dataset.id;
+    if (chk.checked) selectedIds.add(id);
+    else selectedIds.delete(id);
+    chk.closest("tr").classList.toggle("row-selected", chk.checked);
+    updateSelectionInfo();
+  }
+});
+
+selectAllExpenses.addEventListener("change", () => {
+  const filtered = getFilteredExpenses();
+  if (selectAllExpenses.checked) {
+    filtered.forEach((e) => selectedIds.add(e.id));
+  } else {
+    filtered.forEach((e) => selectedIds.delete(e.id));
+  }
+  renderExpenses();
+});
+
+deleteSelectedBtn.addEventListener("click", () => {
+  if (selectedIds.size === 0) return;
+  if (!confirm(`Delete ${selectedIds.size} selected expenses?`)) return;
+  expenses = expenses.filter((e) => !selectedIds.has(e.id));
   refresh();
 });
 
 filterMonth.addEventListener("change", () => {
   activeMonth = filterMonth.value;
+  selectedIds.clear();
   updateCategoryBreakdown();
+  generateInsights();
   renderExpenses();
 });
 
 filterSource.addEventListener("change", () => {
   activeSource = filterSource.value;
+  selectedIds.clear();
   renderExpenses();
 });
 
-deleteFilteredBtn.addEventListener("click", () => {
-  const filtered = getFilteredExpenses();
-  if (filtered.length === 0) return;
+// ── Spending Insights ───────────────────────────────────────
 
-  const label = activeSource === "all" ? "all shown" : getSourceLabel(activeSource);
-  if (!confirm(`Delete ${filtered.length} expenses from "${label}"?`)) return;
+function generateInsights() {
+  const monthExpenses = expenses.filter((e) => getMonthKey(e.date) === activeMonth);
 
-  const idsToDelete = new Set(filtered.map((e) => e.id));
-  expenses = expenses.filter((e) => !idsToDelete.has(e.id));
-  activeSource = "all";
-  refresh();
-});
+  if (monthExpenses.length < 3) {
+    insightsSection.style.display = "none";
+    return;
+  }
+
+  const insights = [];
+  const monthTotal = monthExpenses.reduce((s, e) => s + e.amount, 0);
+
+  // 1. Category totals and percentages
+  const catTotals = {};
+  monthExpenses.forEach((e) => {
+    catTotals[e.category] = (catTotals[e.category] || 0) + e.amount;
+  });
+  const sortedCats = Object.entries(catTotals).sort((a, b) => b[1] - a[1]);
+
+  // 2. Flag categories that take more than 30% of spending
+  sortedCats.forEach(([cat, amount]) => {
+    const pct = (amount / monthTotal) * 100;
+    if (pct > 30 && cat !== "Other") {
+      insights.push({
+        type: "warning",
+        title: `${cat} is ${pct.toFixed(0)}% of your spending`,
+        text: `You spent ${formatCurrency(amount)} on ${cat} this month. That's a large chunk of your ${formatCurrency(monthTotal)} total.`,
+        detail: cat === "Food" ? "Try meal planning and cooking at home more — eating out adds up fast." :
+                cat === "Entertainment" ? "Review subscriptions and digital purchases — cancel anything you don't use weekly." :
+                cat === "Transport" ? "Consider carpooling, fuel-efficient routes, or filling up at cheaper stations." :
+                cat === "Shopping" ? "Try a 24-hour rule — wait a day before non-essential purchases." :
+                cat === "Insurance" ? "Shop around for quotes yearly — loyalty doesn't always pay." :
+                cat === "Fees" ? "Call your bank about a cheaper account type or fee structure." :
+                cat === "Housing" ? "Review your bond rate or rental — refinancing could save thousands." :
+                "Look for ways to reduce this — small cuts here make a big difference.",
+      });
+    }
+  });
+
+  // 3. Find repeated small expenses (same description, multiple times)
+  const descCounts = {};
+  monthExpenses.forEach((e) => {
+    const key = e.description.split(" — ")[0].toLowerCase().replace(/\s+5326.*$/, "").trim();
+    if (!descCounts[key]) descCounts[key] = { count: 0, total: 0, name: e.description.split(" — ")[0] };
+    descCounts[key].count++;
+    descCounts[key].total += e.amount;
+  });
+
+  Object.values(descCounts)
+    .filter((d) => d.count >= 3 && d.total > 50)
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 3)
+    .forEach((d) => {
+      insights.push({
+        type: "info",
+        title: `${d.name} — ${d.count} times this month`,
+        text: `You spent ${formatCurrency(d.total)} across ${d.count} transactions at this merchant.`,
+        detail: "Frequent small purchases can add up. Consider if all of these were necessary.",
+      });
+    });
+
+  // 4. Find single large expenses (top 3 above R500)
+  const bigOnes = [...monthExpenses].sort((a, b) => b.amount - a.amount).slice(0, 3).filter((e) => e.amount >= 500);
+  if (bigOnes.length > 0) {
+    const list = bigOnes.map((e) => `${e.description.split(" — ")[0]} (${formatCurrency(e.amount)})`).join(", ");
+    insights.push({
+      type: "warning",
+      title: "Biggest expenses this month",
+      text: list,
+      detail: "Review these — are they recurring or one-off? Can any be reduced or avoided next month?",
+    });
+  }
+
+  // 5. Compare with previous month
+  const [y, m] = activeMonth.split("-").map(Number);
+  const prevMonth = `${m === 1 ? y - 1 : y}-${String(m === 1 ? 12 : m - 1).padStart(2, "0")}`;
+  const prevExpenses = expenses.filter((e) => getMonthKey(e.date) === prevMonth);
+  if (prevExpenses.length > 0) {
+    const prevTotal = prevExpenses.reduce((s, e) => s + e.amount, 0);
+    const diff = monthTotal - prevTotal;
+    const pctChange = ((diff / prevTotal) * 100).toFixed(0);
+
+    if (Math.abs(diff) > 100) {
+      const prevCatTotals = {};
+      prevExpenses.forEach((e) => {
+        prevCatTotals[e.category] = (prevCatTotals[e.category] || 0) + e.amount;
+      });
+
+      // Find which categories changed the most
+      const catChanges = sortedCats.map(([cat, amount]) => ({
+        cat,
+        current: amount,
+        prev: prevCatTotals[cat] || 0,
+        diff: amount - (prevCatTotals[cat] || 0),
+      })).filter((c) => c.diff > 200).sort((a, b) => b.diff - a.diff);
+
+      const drivers = catChanges.length > 0
+        ? " Biggest increase: " + catChanges.slice(0, 2).map((c) => `${c.cat} (+${formatCurrency(c.diff)})`).join(", ") + "."
+        : "";
+
+      insights.push({
+        type: diff > 0 ? "warning" : "tip",
+        title: diff > 0
+          ? `Spending is up ${pctChange}% from last month`
+          : `Spending is down ${Math.abs(pctChange)}% from last month`,
+        text: diff > 0
+          ? `You spent ${formatCurrency(diff)} more than last month (${formatCurrency(prevTotal)}).${drivers}`
+          : `You saved ${formatCurrency(Math.abs(diff))} compared to last month (${formatCurrency(prevTotal)}). Keep it up!`,
+        detail: diff > 0
+          ? "Check if the increase is from once-off items or if a category is trending up."
+          : "",
+      });
+    }
+  }
+
+  // 6. Daily average and projection
+  const dates = [...new Set(monthExpenses.map((e) => e.date))].sort();
+  const daysSpan = dates.length;
+  if (daysSpan >= 5) {
+    const dailyAvg = monthTotal / daysSpan;
+    const daysInMonth = new Date(y, m, 0).getDate();
+    const projected = dailyAvg * daysInMonth;
+    const today = getToday();
+    const isCurrentMonth = activeMonth === getMonthKey(today);
+
+    if (isCurrentMonth && daysSpan < daysInMonth) {
+      insights.push({
+        type: "info",
+        title: `Daily average: ${formatCurrency(dailyAvg)}`,
+        text: `At this rate, you'll spend about ${formatCurrency(projected)} by month-end.`,
+        detail: `Based on ${daysSpan} days of spending so far. Track daily to stay within budget.`,
+      });
+    }
+  }
+
+  // 7. Savings tips based on categories present
+  const cats = new Set(sortedCats.map(([c]) => c));
+  if (cats.has("Fees") && catTotals["Fees"] > 50) {
+    insights.push({
+      type: "tip",
+      title: `Bank fees total ${formatCurrency(catTotals["Fees"])}`,
+      text: "Consider a bundled bank account or switching to a digital bank with lower fees.",
+      detail: "Declined transaction fees and international charges add up — avoid retrying failed payments.",
+    });
+  }
+
+  if (insights.length === 0) {
+    insights.push({
+      type: "tip",
+      title: "Spending looks balanced",
+      text: `Your ${formatCurrency(monthTotal)} is spread across ${sortedCats.length} categories with no single one dominating.`,
+      detail: "Keep tracking to spot trends over time.",
+    });
+  }
+
+  insightsSection.style.display = "";
+  insightsContent.innerHTML = insights
+    .map((ins) => `
+      <div class="insight-card insight-${ins.type}">
+        <div class="insight-title">${ins.title}</div>
+        <div>${ins.text}</div>
+        ${ins.detail ? `<div class="insight-detail">${ins.detail}</div>` : ""}
+      </div>`)
+    .join("");
+}
 
 // ── Category Keywords ───────────────────────────────────────
 

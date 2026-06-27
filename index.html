@@ -160,6 +160,11 @@
       <div id="category-breakdown" class="category-bars"></div>
     </section>
 
+    <section class="insights" id="insights-section" style="display:none;">
+      <h2>Spending Insights</h2>
+      <div id="insights-content"></div>
+    </section>
+
     <section class="expenses-list">
       <div class="list-header">
         <h2>Expenses</h2>
@@ -172,11 +177,12 @@
       </div>
       <div class="list-actions" id="list-actions" style="display:none;">
         <span id="selected-info"></span>
-        <button class="btn-delete-all" id="delete-filtered-btn">Delete shown expenses</button>
+        <button class="btn-delete-selected" id="delete-selected-btn" style="display:none;">Delete selected</button>
       </div>
       <table id="expenses-table">
         <thead>
           <tr>
+            <th><input type="checkbox" id="select-all-expenses" title="Select all"></th>
             <th>Date</th>
             <th>Description</th>
             <th>Category</th>

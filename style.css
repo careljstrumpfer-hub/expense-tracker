@@ -611,7 +611,7 @@ tbody tr:hover {
   color: #374151;
 }
 
-.btn-delete-all {
+.btn-delete-selected {
   padding: 6px 14px;
   background: #ef4444;
   color: #fff;
@@ -623,8 +623,78 @@ tbody tr:hover {
   transition: background 0.2s;
 }
 
-.btn-delete-all:hover {
+.btn-delete-selected:hover {
   background: #dc2626;
+}
+
+#select-all-expenses {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.expense-check {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+tr.row-selected {
+  background: #fef2f2 !important;
+}
+
+/* Insights */
+.insights {
+  background: #fff;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.insight-card {
+  padding: 12px 14px;
+  border-radius: 8px;
+  margin-bottom: 10px;
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.insight-card:last-child {
+  margin-bottom: 0;
+}
+
+.insight-warning {
+  background: #fef3c7;
+  border-left: 3px solid #f59e0b;
+  color: #92400e;
+}
+
+.insight-tip {
+  background: #ecfdf5;
+  border-left: 3px solid #10b981;
+  color: #065f46;
+}
+
+.insight-info {
+  background: #eff6ff;
+  border-left: 3px solid #3b82f6;
+  color: #1e40af;
+}
+
+.insight-title {
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+
+.insight-amount {
+  font-weight: 700;
+}
+
+.insight-detail {
+  font-size: 0.82rem;
+  margin-top: 4px;
+  opacity: 0.85;
 }
 
 #filter-source {
