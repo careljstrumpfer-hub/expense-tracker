@@ -50,6 +50,43 @@
       </form>
     </section>
 
+    <section class="import-csv">
+      <div class="import-header" id="import-toggle">
+        <h2>Import Bank CSV</h2>
+        <span class="toggle-arrow" id="toggle-arrow">&#9662;</span>
+      </div>
+      <div class="import-body" id="import-body" style="display:none;">
+        <p class="import-hint">Upload a CSV export from your bank (Capitec, FNB, Standard Bank, Nedbank, ABSA, or any CSV with date, description, and amount columns).</p>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="csv-file">Select CSV file</label>
+            <input type="file" id="csv-file" accept=".csv,.txt">
+          </div>
+        </div>
+        <div id="import-preview" style="display:none;">
+          <div class="import-stats" id="import-stats"></div>
+          <div class="import-table-wrap">
+            <table class="import-table">
+              <thead>
+                <tr>
+                  <th><input type="checkbox" id="select-all" checked></th>
+                  <th>Date</th>
+                  <th>Description</th>
+                  <th>Category</th>
+                  <th class="amount-col">Amount</th>
+                </tr>
+              </thead>
+              <tbody id="import-body-table"></tbody>
+            </table>
+          </div>
+          <div class="import-actions">
+            <button class="btn-add" id="import-confirm">Import Selected</button>
+            <button class="btn-cancel" id="import-cancel">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <section class="summary">
       <div class="summary-card">
         <span class="summary-label">Today</span>

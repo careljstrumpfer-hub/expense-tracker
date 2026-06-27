@@ -193,6 +193,177 @@ h2 {
   padding: 12px;
 }
 
+/* Import CSV */
+.import-csv {
+  background: #fff;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.import-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
+}
+
+.import-header h2 {
+  margin-bottom: 0;
+}
+
+.toggle-arrow {
+  font-size: 1.2rem;
+  color: #6b7280;
+  transition: transform 0.2s;
+}
+
+.toggle-arrow.open {
+  transform: rotate(180deg);
+}
+
+.import-hint {
+  color: #6b7280;
+  font-size: 0.85rem;
+  margin: 12px 0;
+  line-height: 1.4;
+}
+
+.import-csv input[type="file"] {
+  padding: 10px 12px;
+  border: 1.5px dashed #d1d5db;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  width: 100%;
+  cursor: pointer;
+  background: #f9fafb;
+}
+
+.import-csv input[type="file"]:hover {
+  border-color: #0f3460;
+  background: #f0f4ff;
+}
+
+.import-stats {
+  display: flex;
+  gap: 16px;
+  margin: 12px 0;
+  font-size: 0.85rem;
+  color: #374151;
+  flex-wrap: wrap;
+}
+
+.import-stat {
+  font-weight: 600;
+}
+
+.import-table-wrap {
+  max-height: 320px;
+  overflow-y: auto;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+.import-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.import-table thead {
+  position: sticky;
+  top: 0;
+  background: #f9fafb;
+  z-index: 1;
+}
+
+.import-table th {
+  text-align: left;
+  padding: 8px 6px;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #6b7280;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.import-table td {
+  padding: 7px 6px;
+  border-bottom: 1px solid #f0f2f5;
+  vertical-align: middle;
+}
+
+.import-table tbody tr:hover {
+  background: #f9fafb;
+}
+
+.import-table input[type="checkbox"] {
+  cursor: pointer;
+  width: 16px;
+  height: 16px;
+}
+
+.import-table select {
+  padding: 4px 6px;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  font-size: 0.82rem;
+  background: #fff;
+}
+
+.import-table .amount-col {
+  text-align: right;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.import-table .desc-cell {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.import-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.import-actions .btn-add {
+  flex: 1;
+}
+
+.btn-cancel {
+  padding: 12px 20px;
+  background: #e5e7eb;
+  color: #374151;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-cancel:hover {
+  background: #d1d5db;
+}
+
+.import-badge {
+  display: inline-block;
+  background: #dbeafe;
+  color: #1e40af;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 3px;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+
 /* Expenses list */
 .expenses-list {
   background: #fff;
@@ -345,5 +516,17 @@ tbody tr:hover {
   .category-value {
     width: 65px;
     font-size: 0.78rem;
+  }
+
+  .import-table {
+    font-size: 0.78rem;
+  }
+
+  .import-table .desc-cell {
+    max-width: 120px;
+  }
+
+  .import-actions {
+    flex-direction: column;
   }
 }
