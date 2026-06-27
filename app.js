@@ -210,8 +210,15 @@ const deleteSelectedBtn = document.getElementById("delete-selected-btn");
 const selectAllExpenses = document.getElementById("select-all-expenses");
 const insightsSection = document.getElementById("insights-section");
 const insightsContent = document.getElementById("insights-content");
+const incomeBody = document.getElementById("income-body");
+const noIncome = document.getElementById("no-income");
+const incomeActions = document.getElementById("income-actions");
+const incomeSelectedInfo = document.getElementById("income-selected-info");
+const deleteIncomeBtn = document.getElementById("delete-income-btn");
+const selectAllIncome = document.getElementById("select-all-income");
 let activeSource = "all";
 let selectedIds = new Set();
+let selectedIncomeIds = new Set();
 
 function updateSummary() {
   const monthExpenses = expenses.filter((e) => getMonthKey(e.date) === activeMonth);
@@ -352,7 +359,11 @@ function renderExpenses() {
       <td><span class="category-tag" style="background: ${CATEGORY_COLORS[e.category] || "#6b7280"}20; color: ${CATEGORY_COLORS[e.category] || "#6b7280"}">${e.category}</span></td>
       <td><span class="source-tag ${getSourceClass(e.source)}">${getSourceLabel(e.source)}</span></td>
       <td class="expense-amount">${formatCurrency(e.amount)}</td>
-      <td><button class="btn-delete" data-id="${e.id}" title="Delete">&times;</button></td>
+      <td class="action-btns">
+        <button class="btn-move" data-id="${e.id}" data-action="to-income" title="Move to income">&#8594;Inc</button>
+        <button class="btn-del-all" data-id="${e.id}" data-desc="${escapeHtml(e.description.slice(0, 30))}" data-action="del-all" title="Delete all like this across months">All</button>
+        <button class="btn-delete" data-id="${e.id}" title="Delete">&times;</button>
+      </td>
     </tr>`
     )
     .join("");
@@ -364,12 +375,14 @@ function refresh() {
   saveExpenses(expenses);
   saveIncome(income);
   selectedIds.clear();
+  selectedIncomeIds.clear();
   updateSummary();
   updateMonthFilter();
   updateSourceFilter();
   updateCategoryBreakdown();
   generateInsights();
   renderExpenses();
+  renderIncome();
 }
 
 form.addEventListener("submit", (e) => {
@@ -411,6 +424,118 @@ document.getElementById("income-btn").addEventListener("click", () => {
   document.getElementById("income-desc").value = "";
   document.getElementById("income-amount").value = "";
   document.getElementById("income-date").value = getToday();
+});
+
+// ── Income List ─────────────────────────────────────────────
+
+function getFilteredIncome() {
+  return income
+    .filter((e) => getMonthKey(e.date) === activeMonth)
+    .sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
+}
+
+function renderIncome() {
+  const filtered = getFilteredIncome();
+
+  if (filtered.length === 0) {
+    incomeBody.innerHTML = "";
+    noIncome.style.display = "block";
+    incomeActions.style.display = "none";
+    return;
+  }
+
+  noIncome.style.display = "none";
+  incomeActions.style.display = "flex";
+
+  const selCount = filtered.filter((e) => selectedIncomeIds.has(e.id)).length;
+  const total = filtered.reduce((s, e) => s + e.amount, 0);
+
+  if (selCount > 0) {
+    incomeSelectedInfo.textContent = `${selCount} of ${filtered.length} selected`;
+    deleteIncomeBtn.style.display = "";
+    deleteIncomeBtn.textContent = `Delete ${selCount} selected`;
+  } else {
+    incomeSelectedInfo.textContent = `${filtered.length} entries — ${formatCurrency(total)}`;
+    deleteIncomeBtn.style.display = "none";
+  }
+
+  selectAllIncome.checked = filtered.every((e) => selectedIncomeIds.has(e.id));
+
+  incomeBody.innerHTML = filtered
+    .map(
+      (e) => `
+    <tr class="${selectedIncomeIds.has(e.id) ? "row-selected" : ""}">
+      <td><input type="checkbox" class="income-check" data-id="${e.id}" ${selectedIncomeIds.has(e.id) ? "checked" : ""}></td>
+      <td class="expense-date">${formatDate(e.date)}</td>
+      <td>${escapeHtml(e.description)}</td>
+      <td><span class="source-tag ${getSourceClass(e.source)}">${getSourceLabel(e.source)}</span></td>
+      <td class="income-amount-cell">+${formatCurrency(e.amount)}</td>
+      <td class="action-btns">
+        <button class="btn-move" data-id="${e.id}" data-action="to-expense" title="Move to expenses">&#8594;Exp</button>
+        <button class="btn-del-all" data-id="${e.id}" data-action="del-all-inc" title="Delete all like this">All</button>
+        <button class="btn-delete" data-id="${e.id}" data-target="income" title="Delete">&times;</button>
+      </td>
+    </tr>`
+    )
+    .join("");
+}
+
+incomeBody.addEventListener("click", (e) => {
+  const delBtn = e.target.closest(".btn-delete");
+  if (delBtn) {
+    income = income.filter((x) => x.id !== delBtn.dataset.id);
+    selectedIncomeIds.delete(delBtn.dataset.id);
+    refresh();
+    return;
+  }
+
+  const moveBtn = e.target.closest(".btn-move");
+  if (moveBtn) {
+    const id = moveBtn.dataset.id;
+    const inc = income.find((x) => x.id === id);
+    if (!inc) return;
+    expenses.push({ id: generateId(), description: inc.description, amount: inc.amount, date: inc.date, source: inc.source, category: categorizeDescription(inc.description) });
+    income = income.filter((x) => x.id !== id);
+    refresh();
+    return;
+  }
+
+  const delAllBtn = e.target.closest(".btn-del-all");
+  if (delAllBtn) {
+    const id = delAllBtn.dataset.id;
+    const inc = income.find((x) => x.id === id);
+    if (!inc) return;
+    const key = inc.description.slice(0, 30).toLowerCase();
+    const matches = income.filter((x) => x.description.slice(0, 30).toLowerCase() === key);
+    if (!confirm(`Delete all ${matches.length} "${inc.description.slice(0, 30)}..." income entries across all months?`)) return;
+    const matchIds = new Set(matches.map((x) => x.id));
+    income = income.filter((x) => !matchIds.has(x.id));
+    refresh();
+    return;
+  }
+
+  const chk = e.target.closest(".income-check");
+  if (chk) {
+    const id = chk.dataset.id;
+    if (chk.checked) selectedIncomeIds.add(id);
+    else selectedIncomeIds.delete(id);
+    chk.closest("tr").classList.toggle("row-selected", chk.checked);
+    renderIncome();
+  }
+});
+
+selectAllIncome.addEventListener("change", () => {
+  const filtered = getFilteredIncome();
+  if (selectAllIncome.checked) filtered.forEach((e) => selectedIncomeIds.add(e.id));
+  else filtered.forEach((e) => selectedIncomeIds.delete(e.id));
+  renderIncome();
+});
+
+deleteIncomeBtn.addEventListener("click", () => {
+  if (selectedIncomeIds.size === 0) return;
+  if (!confirm(`Delete ${selectedIncomeIds.size} selected income entries?`)) return;
+  income = income.filter((e) => !selectedIncomeIds.has(e.id));
+  refresh();
 });
 
 // ── Receipt Scanner ─────────────────────────────────────────
@@ -653,6 +778,31 @@ expensesBody.addEventListener("click", (e) => {
     return;
   }
 
+  const moveBtn = e.target.closest(".btn-move");
+  if (moveBtn) {
+    const id = moveBtn.dataset.id;
+    const exp = expenses.find((x) => x.id === id);
+    if (!exp) return;
+    income.push({ id: generateId(), description: exp.description, amount: exp.amount, date: exp.date, source: exp.source });
+    expenses = expenses.filter((x) => x.id !== id);
+    refresh();
+    return;
+  }
+
+  const delAllBtn = e.target.closest(".btn-del-all");
+  if (delAllBtn) {
+    const id = delAllBtn.dataset.id;
+    const exp = expenses.find((x) => x.id === id);
+    if (!exp) return;
+    const key = exp.description.slice(0, 30).toLowerCase();
+    const matches = expenses.filter((x) => x.description.slice(0, 30).toLowerCase() === key);
+    if (!confirm(`Delete all ${matches.length} "${exp.description.slice(0, 30)}..." entries across all months?`)) return;
+    const matchIds = new Set(matches.map((x) => x.id));
+    expenses = expenses.filter((x) => !matchIds.has(x.id));
+    refresh();
+    return;
+  }
+
   const chk = e.target.closest(".expense-check");
   if (chk) {
     const id = chk.dataset.id;
@@ -683,10 +833,12 @@ deleteSelectedBtn.addEventListener("click", () => {
 filterMonth.addEventListener("change", () => {
   activeMonth = filterMonth.value;
   selectedIds.clear();
+  selectedIncomeIds.clear();
   updateSummary();
   updateCategoryBreakdown();
   generateInsights();
   renderExpenses();
+  renderIncome();
 });
 
 filterSource.addEventListener("change", () => {
@@ -1361,8 +1513,10 @@ function processStandardBankPdf(text) {
 
     // Income (positive amounts)
     if (txAmount > 0) {
-      // Skip refunds/claims from being double-counted as income
-      if (descLower.includes("payment of insurance claims")) continue;
+      // Skip non-income items
+      if (descLower.includes("payment of insurance claims") ||
+          descLower.includes("lottery") || descLower.includes("lotto") ||
+          descLower.includes("vas00")) continue;
       transactions.push({
         date, description, amount: absAmount,
         category: "Income", selected: true, type: "income",

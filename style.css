@@ -902,6 +902,70 @@ tr.row-selected {
   background: #fff;
 }
 
+.income-list {
+  background: #fff;
+  border-radius: 12px;
+  padding: 20px;
+  margin-top: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.income-heading {
+  color: #10b981;
+}
+
+.income-list table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.income-amount-cell {
+  text-align: right;
+  font-weight: 600;
+  color: #10b981;
+  font-variant-numeric: tabular-nums;
+}
+
+.btn-move {
+  background: none;
+  border: none;
+  color: #9ca3af;
+  cursor: pointer;
+  font-size: 0.72rem;
+  padding: 3px 6px;
+  border-radius: 4px;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.btn-move:hover {
+  color: #0f3460;
+  background: #eff6ff;
+}
+
+.btn-del-all {
+  background: none;
+  border: none;
+  color: #9ca3af;
+  cursor: pointer;
+  font-size: 0.72rem;
+  padding: 3px 6px;
+  border-radius: 4px;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.btn-del-all:hover {
+  color: #ef4444;
+  background: #fef2f2;
+}
+
+.action-btns {
+  display: flex;
+  gap: 2px;
+  align-items: center;
+}
+
 .empty-state {
   text-align: center;
   color: #9ca3af;

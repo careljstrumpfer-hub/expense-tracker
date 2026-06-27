@@ -237,6 +237,30 @@
       </table>
       <p id="no-expenses" class="empty-state">No expenses yet. Add one above!</p>
     </section>
+
+    <section class="income-list">
+      <div class="list-header">
+        <h2 class="income-heading">Income</h2>
+      </div>
+      <div class="list-actions" id="income-actions" style="display:none;">
+        <span id="income-selected-info"></span>
+        <button class="btn-delete-selected" id="delete-income-btn" style="display:none;">Delete selected</button>
+      </div>
+      <table id="income-table">
+        <thead>
+          <tr>
+            <th><input type="checkbox" id="select-all-income" title="Select all"></th>
+            <th>Date</th>
+            <th>Description</th>
+            <th>Source</th>
+            <th class="amount-col">Amount</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="income-body"></tbody>
+      </table>
+      <p id="no-income" class="empty-state">No income recorded for this month.</p>
+    </section>
   </div>
 
   <!-- Install Banner -->
