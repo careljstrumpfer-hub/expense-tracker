@@ -720,6 +720,10 @@ function mapBankCategory(bankCategory) {
     "fees": "Fees",
     "legal fees": "Other", "transfer": "Other", "loans": "Other",
     "personal & family": "Other", "interest": "Other",
+    "cellphone": "Utilities", "mobile": "Utilities",
+    "online store": "Entertainment", "digital payments": "Other",
+    "card payments": "Shopping", "prepaid": "Utilities",
+    "uncategorised": "Other",
   };
   return mapping[lower] || null;
 }
@@ -820,7 +824,7 @@ function processCSV(text) {
   return results;
 }
 
-// ── PDF Parsing (Standard Bank) ─────────────────────────────
+// ── PDF Parsing (Multi-format) ──────────────────────────────
 
 async function extractPdfText(file) {
   const arrayBuffer = await file.arrayBuffer();
@@ -834,7 +838,6 @@ async function extractPdfText(file) {
     const page = await pdf.getPage(p);
     const content = await page.getTextContent();
 
-    // Group text items by Y coordinate (tolerance of 2 units)
     const lineMap = new Map();
     for (const item of content.items) {
       if (!item.str.trim() && !item.hasEOL) continue;
@@ -847,21 +850,18 @@ async function extractPdfText(file) {
       });
     }
 
-    // Sort lines top-to-bottom (Y decreases downward in PDF coords)
     const sortedYs = [...lineMap.keys()].sort((a, b) => b - a);
 
     for (const y of sortedYs) {
       const items = lineMap.get(y).sort((a, b) => a.x - b.x);
       let line = "";
       let prevEnd = 0;
-
       for (const item of items) {
         const gap = item.x - prevEnd;
         if (line && gap > 4) line += " ";
         line += item.text;
         prevEnd = item.x + item.width;
       }
-
       const trimmed = line.trim();
       if (trimmed) fullText += trimmed + "\n";
     }
@@ -871,6 +871,123 @@ async function extractPdfText(file) {
 }
 
 function processPdfText(text) {
+  // Auto-detect format and try parsers in order
+  let results = [];
+
+  if (text.includes("Money In") && text.includes("Money Out")) {
+    results = processCapitecPdf(text);
+  }
+
+  if (results.length === 0 && (text.includes("STANDARD BANK") || text.includes("CHEQUE CARD"))) {
+    results = processStandardBankPdf(text);
+  }
+
+  // Generic fallback for FNB, Nedbank, ABSA, or any other bank
+  if (results.length === 0) {
+    results = processGenericPdf(text);
+  }
+
+  return results;
+}
+
+// ── Capitec PDF ─────────────────────────────────────────────
+
+const CAPITEC_CATS = [
+  "Medical Aid", "Legal Fees", "Online Store", "Other Income", "Card Payments",
+  "Digital Payments", "Cellphone", "Transfer", "Interest", "Fees",
+  "Uncategorised", "Prepaid", "Groceries", "Food", "Transport",
+  "Shopping", "Entertainment", "Health", "Education", "Insurance",
+];
+
+function processCapitecPdf(text) {
+  const lines = text.split("\n");
+  const dateRegex = /^(\d{2})\/(\d{2})\/(\d{4})\s/;
+  // Amounts with spaces as thousands separators: -1 018.00 or 7 200.00
+  const amtRegex = /-?\d[\d ]*\.\d{2}/g;
+
+  const skipLines = [
+    "Capitec Bank", "Client Care", "Unique Document", "Page ", "* Includes VAT",
+    "Main Account Statement", "Tax Invoice", "Statement Information",
+    "Interest, Rewards", "Money In Summary", "Money Out Summary",
+    "Live Better Benefits", "Spending Summary", "Scheduled Payments",
+    "Debit Orders", "Card Subscriptions", "24hr Client Care",
+    "From Date:", "To Date:", "Print Date:", "Account ",
+  ];
+
+  const skipCategories = ["transfer", "interest", "other income"];
+
+  const transactions = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const dateMatch = line.match(dateRegex);
+    if (!dateMatch) continue;
+    if (skipLines.some((p) => line.includes(p))) continue;
+
+    const date = `${dateMatch[3]}-${dateMatch[2]}-${dateMatch[1]}`;
+    const afterDate = line.slice(dateMatch[0].length);
+
+    // Find the category in the line
+    let category = "";
+    let catIndex = -1;
+    for (const cat of CAPITEC_CATS) {
+      const idx = afterDate.lastIndexOf(cat);
+      if (idx !== -1 && (catIndex === -1 || idx > catIndex)) {
+        category = cat;
+        catIndex = idx;
+      }
+    }
+
+    // Skip transfers, interest, income
+    if (category && skipCategories.includes(category.toLowerCase())) continue;
+
+    let description, amountsStr;
+    if (catIndex !== -1) {
+      description = afterDate.slice(0, catIndex).trim();
+      amountsStr = afterDate.slice(catIndex + category.length);
+    } else {
+      // No known category found — try to extract amounts from the end
+      description = afterDate;
+      amountsStr = afterDate;
+    }
+
+    // Extract all amounts (handling space-separated thousands)
+    const amounts = [...amountsStr.matchAll(amtRegex)].map((m) =>
+      parseFloat(m[0].replace(/\s/g, ""))
+    );
+
+    // Find Money Out and Fee amounts (negative values)
+    let totalExpense = 0;
+    amounts.forEach((a) => { if (a < 0) totalExpense += Math.abs(a); });
+
+    if (totalExpense === 0) continue;
+
+    // Clean up description
+    description = description
+      .replace(/\s*\(Card \d+\)$/, "")
+      .replace(/\s*\(\d+\):\s*/, ": ")
+      .trim();
+
+    if (!description) continue;
+
+    // Map Capitec category to our categories
+    const mappedCat = mapBankCategory(category) || categorizeDescription(description);
+
+    transactions.push({
+      date,
+      description,
+      amount: totalExpense,
+      category: mappedCat,
+      selected: true,
+    });
+  }
+
+  return transactions;
+}
+
+// ── Standard Bank PDF ───────────────────────────────────────
+
+function processStandardBankPdf(text) {
   const lines = text.split("\n");
   const dateRegex = /^(\d{2})\s*(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s*(\d{2})\s/i;
   const amountRegex = /-?\d[\d,]*\.\d{2}/g;
@@ -907,12 +1024,10 @@ function processPdfText(text) {
     const amounts = [...afterDate.matchAll(amountRegex)].map((m) => ({
       value: parseFloat(m[0].replace(/,/g, "")),
       index: m.index,
-      raw: m[0],
     }));
 
     if (amounts.length < 1) { i++; continue; }
 
-    // Last two amounts are always: transaction amount, then balance
     let txAmount, descEnd;
     if (amounts.length >= 2) {
       txAmount = amounts[amounts.length - 2].value;
@@ -923,11 +1038,9 @@ function processPdfText(text) {
     }
 
     let description = afterDate.slice(0, descEnd).trim();
-    // Clean card references from description
     description = description.replace(/\s*5326\*\d+(\s+\d{2}\s\w{3})?$/, "").trim();
     description = description.replace(/\s*5326\d+$/, "").trim();
 
-    // Collect ALL continuation lines (transaction type, extra info)
     const continuations = [];
     i++;
     while (i < lines.length) {
@@ -945,10 +1058,8 @@ function processPdfText(text) {
       description = description + " — " + continuations.join(" ");
     }
 
-    // Skip deposits (positive amounts) — these are income, not expenses
     if (txAmount > 0) continue;
 
-    // Skip inter-account transfers (not real expenses)
     const descLower = description.toLowerCase();
     if (descLower.includes("ib transfer to") || descLower.includes("ib transfer from") ||
         descLower.includes("payshap payment from") || descLower.includes("electronic banking payment fr") ||
@@ -968,6 +1079,63 @@ function processPdfText(text) {
   }
 
   return transactions;
+}
+
+// ── Generic PDF fallback ────────────────────────────────────
+// For unknown bank PDFs: try to find lines with dates and amounts
+
+function processGenericPdf(text) {
+  const lines = text.split("\n");
+  const datePatterns = [
+    /^(\d{2})\/(\d{2})\/(\d{4})/,                    // DD/MM/YYYY
+    /^(\d{4})-(\d{2})-(\d{2})/,                      // YYYY-MM-DD
+    /^(\d{2})-(\d{2})-(\d{4})/,                      // DD-MM-YYYY
+    /^(\d{2})\s(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s(\d{2,4})/i, // DD Mon YY(YY)
+  ];
+  const amtRegex = /-?\d[\d, ]*\.\d{2}/g;
+
+  const results = [];
+  for (const line of lines) {
+    let date = null;
+    let afterDate = "";
+
+    for (const pat of datePatterns) {
+      const m = line.match(pat);
+      if (m) {
+        date = parseDate(m[0]);
+        afterDate = line.slice(m[0].length).trim();
+        break;
+      }
+    }
+    if (!date || !afterDate) continue;
+
+    const amounts = [...afterDate.matchAll(amtRegex)].map((m) => ({
+      value: parseFloat(m[0].replace(/[, ]/g, "")),
+      index: m.index,
+    }));
+
+    if (amounts.length < 1) continue;
+
+    const negAmounts = amounts.filter((a) => a.value < 0);
+    if (negAmounts.length === 0) continue;
+
+    const txAmount = amounts.length >= 2 ? amounts[amounts.length - 2].value : amounts[0].value;
+    if (txAmount >= 0) continue;
+
+    const descEnd = amounts.length >= 2 ? amounts[amounts.length - 2].index : amounts[0].index;
+    const description = afterDate.slice(0, descEnd).trim();
+    if (!description || description.length < 3) continue;
+
+    results.push({
+      date,
+      description,
+      amount: Math.abs(txAmount),
+      category: categorizeDescription(description),
+      selected: true,
+    });
+  }
+
+  return results;
 }
 
 // ── Import UI ───────────────────────────────────────────────
