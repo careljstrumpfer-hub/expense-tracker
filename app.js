@@ -554,23 +554,41 @@ async function extractPdfText(file) {
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
   let fullText = "";
 
-  for (let i = 1; i <= pdf.numPages; i++) {
-    const page = await pdf.getPage(i);
+  for (let p = 1; p <= pdf.numPages; p++) {
+    const page = await pdf.getPage(p);
     const content = await page.getTextContent();
-    const lines = [];
-    let currentLine = "";
-    let lastY = null;
 
+    // Group text items by Y coordinate (tolerance of 2 units)
+    const lineMap = new Map();
     for (const item of content.items) {
-      if (lastY !== null && Math.abs(item.transform[5] - lastY) > 3) {
-        lines.push(currentLine.trim());
-        currentLine = "";
-      }
-      currentLine += item.str;
-      lastY = item.transform[5];
+      if (!item.str.trim() && !item.hasEOL) continue;
+      const y = Math.round(item.transform[5] / 2) * 2;
+      if (!lineMap.has(y)) lineMap.set(y, []);
+      lineMap.get(y).push({
+        text: item.str,
+        x: item.transform[4],
+        width: item.width || 0,
+      });
     }
-    if (currentLine.trim()) lines.push(currentLine.trim());
-    fullText += lines.join("\n") + "\n";
+
+    // Sort lines top-to-bottom (Y decreases downward in PDF coords)
+    const sortedYs = [...lineMap.keys()].sort((a, b) => b - a);
+
+    for (const y of sortedYs) {
+      const items = lineMap.get(y).sort((a, b) => a.x - b.x);
+      let line = "";
+      let prevEnd = 0;
+
+      for (const item of items) {
+        const gap = item.x - prevEnd;
+        if (line && gap > 4) line += " ";
+        line += item.text;
+        prevEnd = item.x + item.width;
+      }
+
+      const trimmed = line.trim();
+      if (trimmed) fullText += trimmed + "\n";
+    }
   }
 
   return fullText;
@@ -578,9 +596,21 @@ async function extractPdfText(file) {
 
 function processPdfText(text) {
   const lines = text.split("\n");
-  const dateRegex = /^(\d{2})\s(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s(\d{2})\s/i;
-  const amountRegex = /-?[\d,]+\.\d{2}/g;
+  const dateRegex = /^(\d{2})\s*(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s*(\d{2})\s/i;
+  const amountRegex = /-?\d[\d,]*\.\d{2}/g;
   const monthMap = { jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12 };
+
+  const skipPatterns = [
+    "STATEMENT OPENING", "STATEMENT CLOSING", "Statement Summary",
+    "Payments -R", "Deposits R", "Please verify",
+  ];
+
+  const headerPatterns = [
+    "Standard Bank", "Reg. No.", "Code of Banking", "Customer Care",
+    "Website:", "Transaction details", "Account number", "Date Description",
+    "Account holder", "Product name", "Available Balance", "MOOIRIVIER",
+    "POTCHEFSTROOM",
+  ];
 
   const transactions = [];
   let i = 0;
@@ -590,8 +620,7 @@ function processPdfText(text) {
     const dateMatch = line.match(dateRegex);
 
     if (!dateMatch) { i++; continue; }
-
-    if (line.includes("STATEMENT OPENING BALANCE") || line.includes("STATEMENT CLOSING BALANCE")) { i++; continue; }
+    if (skipPatterns.some((p) => line.includes(p))) { i++; continue; }
 
     const day = dateMatch[1];
     const mon = monthMap[dateMatch[2].toLowerCase()];
@@ -602,10 +631,12 @@ function processPdfText(text) {
     const amounts = [...afterDate.matchAll(amountRegex)].map((m) => ({
       value: parseFloat(m[0].replace(/,/g, "")),
       index: m.index,
+      raw: m[0],
     }));
 
     if (amounts.length < 1) { i++; continue; }
 
+    // Last two amounts are always: transaction amount, then balance
     let txAmount, descEnd;
     if (amounts.length >= 2) {
       txAmount = amounts[amounts.length - 2].value;
@@ -616,35 +647,30 @@ function processPdfText(text) {
     }
 
     let description = afterDate.slice(0, descEnd).trim();
-    description = description.replace(/\s+5326\*\d+\s+\d{2}\s\w{3}$/, "").trim();
-    description = description.replace(/\s+5326\*\d+$/, "").trim();
+    // Clean card references from description
+    description = description.replace(/\s*5326\*\d+(\s+\d{2}\s\w{3})?$/, "").trim();
+    description = description.replace(/\s*5326\d+$/, "").trim();
 
-    // Collect continuation lines (transaction type)
-    let type = "";
+    // Collect ALL continuation lines (transaction type, extra info)
+    const continuations = [];
     i++;
-    while (i < lines.length && !lines[i].match(dateRegex)) {
+    while (i < lines.length) {
       const cl = lines[i].trim();
-      if (!cl || cl.includes("Standard Bank") || cl.includes("Reg. No.") ||
-          cl.includes("Code of Banking") || cl.includes("Customer Care") ||
-          cl.includes("Website:") || cl.includes("Transaction details") ||
-          cl.includes("Account number") || cl.includes("Date Description") ||
-          cl.match(/^Pg \d+ of/) || cl.match(/^\d{6}$/) || cl === "MOOIRIVIER" ||
-          cl.match(/^From:/) || cl.match(/^To:/) || cl.match(/^\d{2} \w{3} \d{4}$/) ||
-          cl.match(/^Account holder/) || cl.match(/^Product name/) ||
-          cl.match(/^Available Balance/)) {
-        i++;
-        continue;
-      }
-      type = cl;
+      if (!cl || lines[i].match(dateRegex)) break;
+      if (headerPatterns.some((p) => cl.includes(p))) { i++; continue; }
+      if (cl.match(/^Pg \d+ of/) || cl.match(/^\d{6}$/) || cl.match(/^From:/) ||
+          cl.match(/^To:/) || cl.match(/^\d{2} \w{3} \d{4}$/) || cl === "ZA" ||
+          cl.match(/^\d{4}$/) || cl.includes("debits have not yet")) { i++; continue; }
+      continuations.push(cl);
       i++;
-      break;
     }
 
-    if (type) description = description + " — " + type;
-
-    if (txAmount >= 0 && !description.toLowerCase().includes("fee") && !description.toLowerCase().includes("charge")) {
-      continue;
+    if (continuations.length > 0) {
+      description = description + " — " + continuations.join(" ");
     }
+
+    // Skip deposits (positive amounts) — these are income, not expenses
+    if (txAmount > 0) continue;
 
     const absAmount = Math.abs(txAmount);
     if (absAmount === 0) continue;
