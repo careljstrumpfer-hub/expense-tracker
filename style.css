@@ -561,6 +561,22 @@ h2 {
   background: #fef9ee;
 }
 
+.row-income {
+  background: #f0fdf4;
+}
+
+.income-badge {
+  display: inline-block;
+  background: #d1fae5;
+  color: #065f46;
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 3px;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+
 .dup-badge {
   display: inline-block;
   background: #fef3c7;

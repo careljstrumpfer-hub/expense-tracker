@@ -1081,6 +1081,26 @@ function processCSV(text) {
       const deb = parseAmount(fields[cols.debitCol]);
       if (deb) amount = Math.abs(deb);
     }
+    // Check for income (Money In)
+    let incomeAmount = 0;
+    if (cols.moneyInCol !== -1) {
+      const inc = parseAmount(fields[cols.moneyInCol]);
+      if (inc) incomeAmount = Math.abs(inc);
+    }
+
+    const bankCat = cols.categoryCol !== -1 ? (fields[cols.categoryCol] || "").toLowerCase().trim() : "";
+    const parentCat = cols.parentCategoryCol !== -1 ? (fields[cols.parentCategoryCol] || "").toLowerCase().trim() : "";
+
+    // Skip transfers
+    if (bankCat === "transfer" || parentCat === "transfer") continue;
+
+    // Income row (Money In with no Money Out)
+    if (incomeAmount > 0 && amount === 0) {
+      if (bankCat === "interest") continue;
+      results.push({ date, description, amount: incomeAmount, category: "Income", selected: true, type: "income" });
+      continue;
+    }
+
     if (amount === 0) continue;
 
     let category = null;
@@ -1088,13 +1108,7 @@ function processCSV(text) {
     if (!category && cols.parentCategoryCol !== -1) category = mapBankCategory(fields[cols.parentCategoryCol]);
     if (!category) category = categorizeDescription(description);
 
-    // Skip transfers (not real expenses)
-    if (cols.categoryCol !== -1 || cols.parentCategoryCol !== -1) {
-      const bankCat = (fields[cols.categoryCol] || fields[cols.parentCategoryCol] || "").toLowerCase();
-      if (bankCat === "transfer" || bankCat === "other income") continue;
-    }
-
-    results.push({ date, description, amount, category, selected: true });
+    results.push({ date, description, amount, category, selected: true, type: "expense" });
   }
 
   return results;
@@ -1214,31 +1228,30 @@ function processCapitecPdf(text) {
       }
     }
 
-    // Skip transfers, interest, income
-    if (category && skipCategories.includes(category.toLowerCase())) continue;
+    // Skip transfers and interest
+    const catLower = category.toLowerCase();
+    if (catLower === "transfer" || catLower === "interest") continue;
 
     let description, amountsStr;
     if (catIndex !== -1) {
       description = afterDate.slice(0, catIndex).trim();
       amountsStr = afterDate.slice(catIndex + category.length);
     } else {
-      // No known category found — try to extract amounts from the end
       description = afterDate;
       amountsStr = afterDate;
     }
 
-    // Extract all amounts (handling space-separated thousands)
     const amounts = [...amountsStr.matchAll(amtRegex)].map((m) =>
       parseFloat(m[0].replace(/\s/g, ""))
     );
 
-    // Find Money Out and Fee amounts (negative values)
     let totalExpense = 0;
-    amounts.forEach((a) => { if (a < 0) totalExpense += Math.abs(a); });
+    let totalIncome = 0;
+    amounts.forEach((a) => {
+      if (a < 0) totalExpense += Math.abs(a);
+      else if (a > 0 && amounts.indexOf(a) < amounts.length - 1 || catLower === "other income") totalIncome += a;
+    });
 
-    if (totalExpense === 0) continue;
-
-    // Clean up description
     description = description
       .replace(/\s*\(Card \d+\)$/, "")
       .replace(/\s*\(\d+\):\s*/, ": ")
@@ -1246,16 +1259,19 @@ function processCapitecPdf(text) {
 
     if (!description) continue;
 
-    // Map Capitec category to our categories
-    const mappedCat = mapBankCategory(category) || categorizeDescription(description);
+    // Income row
+    if (catLower === "other income" || (totalIncome > 0 && totalExpense === 0)) {
+      const incAmt = totalIncome > 0 ? totalIncome : (amounts.length > 0 ? Math.abs(amounts[0]) : 0);
+      if (incAmt > 0) {
+        transactions.push({ date, description, amount: incAmt, category: "Income", selected: true, type: "income" });
+      }
+      continue;
+    }
 
-    transactions.push({
-      date,
-      description,
-      amount: totalExpense,
-      category: mappedCat,
-      selected: true,
-    });
+    if (totalExpense === 0) continue;
+
+    const mappedCat = mapBankCategory(category) || categorizeDescription(description);
+    transactions.push({ date, description, amount: totalExpense, category: mappedCat, selected: true, type: "expense" });
   }
 
   return transactions;
@@ -1334,23 +1350,30 @@ function processStandardBankPdf(text) {
       description = description + " — " + continuations.join(" ");
     }
 
-    if (txAmount > 0) continue;
-
     const descLower = description.toLowerCase();
+
+    // Skip transfers between own accounts
     if (descLower.includes("ib transfer to") || descLower.includes("ib transfer from") ||
-        descLower.includes("payshap payment from") || descLower.includes("electronic banking payment fr") ||
-        descLower.includes("payment of insurance claims") || descLower.includes("credit transfer") ||
         descLower.includes("electronic trf-credit")) continue;
 
     const absAmount = Math.abs(txAmount);
     if (absAmount === 0) continue;
 
+    // Income (positive amounts)
+    if (txAmount > 0) {
+      // Skip refunds/claims from being double-counted as income
+      if (descLower.includes("payment of insurance claims")) continue;
+      transactions.push({
+        date, description, amount: absAmount,
+        category: "Income", selected: true, type: "income",
+      });
+      continue;
+    }
+
     transactions.push({
-      date,
-      description,
-      amount: absAmount,
+      date, description, amount: absAmount,
       category: categorizeDescription(description),
-      selected: true,
+      selected: true, type: "expense",
     });
   }
 
@@ -1476,20 +1499,28 @@ importFileInput.addEventListener("change", async (e) => {
     return;
   }
 
-  // Mark duplicates — match on date + amount + description start
-  const existingKeys = new Set(
+  // Mark duplicates — check expenses against expenses, income against income
+  const expenseKeys = new Set(
     expenses.map((e) => `${e.date}|${e.amount.toFixed(2)}|${e.description.slice(0, 30).toLowerCase()}`)
   );
+  const incomeKeys = new Set(
+    income.map((e) => `${e.date}|${e.amount.toFixed(2)}|${e.description.slice(0, 30).toLowerCase()}`)
+  );
   let dupCount = 0;
+  // Also track keys within this import to catch duplicates within the same file
+  const seenInImport = new Set();
   importedRows.forEach((r) => {
-    const key = `${r.date}|${r.amount.toFixed(2)}|${r.description.slice(0, 30).toLowerCase()}`;
-    if (existingKeys.has(key)) {
+    const key = `${r.type || "expense"}|${r.date}|${r.amount.toFixed(2)}|${r.description.slice(0, 30).toLowerCase()}`;
+    const existingSet = (r.type === "income") ? incomeKeys : expenseKeys;
+    const checkKey = `${r.date}|${r.amount.toFixed(2)}|${r.description.slice(0, 30).toLowerCase()}`;
+    if (existingSet.has(checkKey) || seenInImport.has(key)) {
       r.duplicate = true;
       r.selected = false;
       dupCount++;
     } else {
       r.duplicate = false;
     }
+    seenInImport.add(key);
   });
 
   importConfirm.style.display = "";
@@ -1500,17 +1531,23 @@ function renderImportPreview(dupCount) {
   importPreview.style.display = "block";
   selectAll.checked = importedRows.every((r) => r.selected);
 
-  const selectedCount = importedRows.filter((r) => r.selected).length;
-  const totalAmount = importedRows.filter((r) => r.selected).reduce((s, r) => s + r.amount, 0);
+  const selected = importedRows.filter((r) => r.selected);
+  const selectedCount = selected.length;
+  const selExpenses = selected.filter((r) => r.type !== "income");
+  const selIncome = selected.filter((r) => r.type === "income");
+  const incomeCount = importedRows.filter((r) => r.type === "income").length;
 
   const dupInfo = dupCount > 0
-    ? `<span style="color:#f59e0b"><span class="import-stat">${dupCount}</span> duplicates (deselected)</span>`
+    ? `<span style="color:#f59e0b"><span class="import-stat">${dupCount}</span> duplicates</span>`
+    : "";
+  const incInfo = incomeCount > 0
+    ? `<span style="color:#10b981"><span class="import-stat">${incomeCount}</span> income</span>`
     : "";
 
   importStats.innerHTML = `
     <span><span class="import-stat">${importedRows.length}</span> transactions</span>
     <span><span class="import-stat">${selectedCount}</span> selected</span>
-    <span>Total: <span class="import-stat">${formatCurrency(totalAmount)}</span></span>
+    ${incInfo}
     ${dupInfo}
   `;
 
@@ -1521,12 +1558,12 @@ function renderImportPreview(dupCount) {
   importBodyTable.innerHTML = importedRows
     .map(
       (r, i) => `
-    <tr class="${r.duplicate ? "row-duplicate" : ""}">
+    <tr class="${r.duplicate ? "row-duplicate" : ""} ${r.type === "income" ? "row-income" : ""}">
       <td><input type="checkbox" class="row-check" data-idx="${i}" ${r.selected ? "checked" : ""}></td>
       <td class="expense-date">${formatDate(r.date)}</td>
-      <td class="desc-cell" title="${escapeHtml(r.description)}">${escapeHtml(r.description)}${r.duplicate ? ' <span class="dup-badge">duplicate</span>' : ""}</td>
-      <td><select class="row-category" data-idx="${i}">${categoryOptions.replace(`value="${r.category}"`, `value="${r.category}" selected`)}</select>${!r.duplicate && r.category !== "Other" ? '<span class="import-badge">auto</span>' : ""}</td>
-      <td class="amount-col">${formatCurrency(r.amount)}</td>
+      <td class="desc-cell" title="${escapeHtml(r.description)}">${escapeHtml(r.description)}${r.duplicate ? ' <span class="dup-badge">duplicate</span>' : ""}${r.type === "income" ? ' <span class="income-badge">income</span>' : ""}</td>
+      <td>${r.type === "income" ? '<span class="category-tag" style="background:#d1fae520;color:#10b981">Income</span>' : `<select class="row-category" data-idx="${i}">${categoryOptions.replace(`value="${r.category}"`, `value="${r.category}" selected`)}</select>${!r.duplicate && r.category !== "Other" ? '<span class="import-badge">auto</span>' : ""}`}</td>
+      <td class="amount-col" style="${r.type === "income" ? "color:#10b981" : ""}">${r.type === "income" ? "+" : ""}${formatCurrency(r.amount)}</td>
     </tr>`
     )
     .join("");
@@ -1553,15 +1590,28 @@ importConfirm.addEventListener("click", () => {
   const toImport = importedRows.filter((r) => r.selected);
   if (toImport.length === 0) return;
 
+  let expCount = 0, incCount = 0;
   toImport.forEach((r) => {
-    expenses.push({
-      id: generateId(),
-      description: r.description,
-      amount: r.amount,
-      category: r.category,
-      date: r.date,
-      source: importSourceName,
-    });
+    if (r.type === "income") {
+      income.push({
+        id: generateId(),
+        description: r.description,
+        amount: r.amount,
+        date: r.date,
+        source: importSourceName,
+      });
+      incCount++;
+    } else {
+      expenses.push({
+        id: generateId(),
+        description: r.description,
+        amount: r.amount,
+        category: r.category,
+        date: r.date,
+        source: importSourceName,
+      });
+      expCount++;
+    }
   });
 
   activeMonth = getMonthKey(toImport[0].date);
@@ -1570,7 +1620,11 @@ importConfirm.addEventListener("click", () => {
   importedRows = [];
   importFileInput.value = "";
   importPreview.style.display = "none";
-  importStats.innerHTML = `<span style="color:#10b981;font-weight:600">Imported ${toImport.length} expenses!</span>`;
+
+  const parts = [];
+  if (expCount > 0) parts.push(`${expCount} expenses`);
+  if (incCount > 0) parts.push(`${incCount} income`);
+  importStats.innerHTML = `<span style="color:#10b981;font-weight:600">Imported ${parts.join(" and ")}!</span>`;
   setTimeout(() => { importStats.innerHTML = ""; }, 3000);
 });
 
