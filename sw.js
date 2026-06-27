@@ -1,4 +1,4 @@
-const CACHE_NAME = "expense-tracker-v3";
+const CACHE_NAME = "expense-tracker-v4";
 const ASSETS = [
   "./",
   "./index.html",
@@ -8,6 +8,7 @@ const ASSETS = [
   "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js",
   "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js",
   "https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js",
+  "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js",
 ];
 
 self.addEventListener("install", (e) => {

@@ -369,6 +369,135 @@ form.addEventListener("submit", (e) => {
   descInput.focus();
 });
 
+// ── Receipt Scanner ─────────────────────────────────────────
+
+const scanBtn = document.getElementById("scan-btn");
+const receiptInput = document.getElementById("receipt-input");
+const scanStatus = document.getElementById("scan-status");
+
+scanBtn.addEventListener("click", () => receiptInput.click());
+
+receiptInput.addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  scanBtn.disabled = true;
+  scanStatus.style.display = "block";
+  scanStatus.className = "scan-status scan-progress";
+  scanStatus.innerHTML = 'Reading receipt...<div class="scan-progress-bar"><div class="scan-progress-fill" id="scan-fill" style="width:10%"></div></div>';
+
+  try {
+    const result = await Tesseract.recognize(file, "eng", {
+      logger: (m) => {
+        if (m.status === "recognizing text") {
+          const fill = document.getElementById("scan-fill");
+          if (fill) fill.style.width = Math.round(m.progress * 100) + "%";
+        }
+      },
+    });
+
+    const text = result.data.text;
+    const parsed = parseReceipt(text);
+
+    if (parsed.amount) {
+      amountInput.value = parsed.amount.toFixed(2);
+    }
+    if (parsed.description) {
+      descInput.value = parsed.description;
+    }
+    if (parsed.date) {
+      dateInput.value = parsed.date;
+    }
+    if (parsed.category) {
+      categoryInput.value = parsed.category;
+    }
+
+    const found = [];
+    if (parsed.description) found.push("store");
+    if (parsed.amount) found.push("amount");
+    if (parsed.date) found.push("date");
+
+    if (found.length > 0) {
+      scanStatus.className = "scan-status scan-success";
+      scanStatus.textContent = `Found ${found.join(", ")} — review and tap Add Expense.`;
+    } else {
+      scanStatus.className = "scan-status scan-error";
+      scanStatus.textContent = "Couldn't read the receipt clearly. Try a clearer photo or enter manually.";
+    }
+  } catch (err) {
+    scanStatus.className = "scan-status scan-error";
+    scanStatus.textContent = "Failed to scan: " + err.message;
+  }
+
+  scanBtn.disabled = false;
+  receiptInput.value = "";
+  setTimeout(() => { scanStatus.style.display = "none"; }, 8000);
+});
+
+function parseReceipt(text) {
+  const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+  const result = { description: null, amount: null, date: null, category: null };
+
+  // Find store name — usually one of the first non-empty lines with letters
+  for (const line of lines.slice(0, 8)) {
+    const cleaned = line.replace(/[^a-zA-Z\s]/g, "").trim();
+    if (cleaned.length >= 3 && cleaned.length <= 40 && /[a-zA-Z]{3,}/.test(cleaned)) {
+      result.description = cleaned.split(/\s+/).map((w) =>
+        w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()
+      ).join(" ");
+      break;
+    }
+  }
+
+  // Find total amount — look for "total" keyword near a number
+  const totalPatterns = [
+    /(?:total|totaal|amount\s*due|balance\s*due|nett|grand\s*total|te\s*betaal)[:\s]*R?\s*(\d[\d\s,]*\.\d{2})/i,
+    /R?\s*(\d[\d\s,]*\.\d{2})\s*(?:total|totaal)/i,
+  ];
+
+  for (const pat of totalPatterns) {
+    const m = text.match(pat);
+    if (m) {
+      result.amount = parseFloat(m[1].replace(/[\s,]/g, ""));
+      break;
+    }
+  }
+
+  // Fallback: find the largest amount on the receipt
+  if (!result.amount) {
+    const amtRegex = /R?\s*(\d[\d\s,]*\.\d{2})/g;
+    let maxAmt = 0;
+    let match;
+    while ((match = amtRegex.exec(text)) !== null) {
+      const val = parseFloat(match[1].replace(/[\s,]/g, ""));
+      if (val > maxAmt && val < 100000) maxAmt = val;
+    }
+    if (maxAmt > 0) result.amount = maxAmt;
+  }
+
+  // Find date
+  const datePatterns = [
+    /(\d{2})[\/\-](\d{2})[\/\-](\d{4})/,   // DD/MM/YYYY
+    /(\d{4})[\/\-](\d{2})[\/\-](\d{2})/,   // YYYY/MM/DD
+    /(\d{2})\s(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*\s(\d{4})/i,
+  ];
+
+  for (const pat of datePatterns) {
+    const m = text.match(pat);
+    if (m) {
+      result.date = parseDate(m[0]);
+      break;
+    }
+  }
+
+  // Auto-categorize from store name
+  if (result.description) {
+    result.category = categorizeDescription(result.description);
+  }
+
+  return result;
+}
+
 expensesBody.addEventListener("click", (e) => {
   const btn = e.target.closest(".btn-delete");
   if (btn) {
