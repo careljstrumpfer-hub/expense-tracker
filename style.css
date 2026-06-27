@@ -427,6 +427,23 @@ h2 {
   background: #d1d5db;
 }
 
+.row-duplicate {
+  opacity: 0.5;
+  background: #fef9ee;
+}
+
+.dup-badge {
+  display: inline-block;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 3px;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+
 .import-badge {
   display: inline-block;
   background: #dbeafe;

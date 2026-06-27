@@ -1032,23 +1032,42 @@ importFileInput.addEventListener("change", async (e) => {
     return;
   }
 
+  // Mark duplicates — match on date + amount + description start
+  const existingKeys = new Set(
+    expenses.map((e) => `${e.date}|${e.amount.toFixed(2)}|${e.description.slice(0, 30).toLowerCase()}`)
+  );
+  let dupCount = 0;
+  importedRows.forEach((r) => {
+    const key = `${r.date}|${r.amount.toFixed(2)}|${r.description.slice(0, 30).toLowerCase()}`;
+    if (existingKeys.has(key)) {
+      r.duplicate = true;
+      r.selected = false;
+      dupCount++;
+    } else {
+      r.duplicate = false;
+    }
+  });
+
   importConfirm.style.display = "";
-  renderImportPreview();
+  renderImportPreview(dupCount);
 });
 
-function renderImportPreview() {
+function renderImportPreview(dupCount) {
   importPreview.style.display = "block";
   selectAll.checked = importedRows.every((r) => r.selected);
 
   const selectedCount = importedRows.filter((r) => r.selected).length;
   const totalAmount = importedRows.filter((r) => r.selected).reduce((s, r) => s + r.amount, 0);
-  const categories = [...new Set(importedRows.map((r) => r.category))];
+
+  const dupInfo = dupCount > 0
+    ? `<span style="color:#f59e0b"><span class="import-stat">${dupCount}</span> duplicates (deselected)</span>`
+    : "";
 
   importStats.innerHTML = `
     <span><span class="import-stat">${importedRows.length}</span> transactions</span>
     <span><span class="import-stat">${selectedCount}</span> selected</span>
     <span>Total: <span class="import-stat">${formatCurrency(totalAmount)}</span></span>
-    <span><span class="import-stat">${categories.length}</span> categories</span>
+    ${dupInfo}
   `;
 
   const categoryOptions = Object.keys(CATEGORY_COLORS)
@@ -1058,11 +1077,11 @@ function renderImportPreview() {
   importBodyTable.innerHTML = importedRows
     .map(
       (r, i) => `
-    <tr>
+    <tr class="${r.duplicate ? "row-duplicate" : ""}">
       <td><input type="checkbox" class="row-check" data-idx="${i}" ${r.selected ? "checked" : ""}></td>
       <td class="expense-date">${formatDate(r.date)}</td>
-      <td class="desc-cell" title="${escapeHtml(r.description)}">${escapeHtml(r.description)}</td>
-      <td><select class="row-category" data-idx="${i}">${categoryOptions.replace(`value="${r.category}"`, `value="${r.category}" selected`)}</select>${r.category !== "Other" ? '<span class="import-badge">auto</span>' : ""}</td>
+      <td class="desc-cell" title="${escapeHtml(r.description)}">${escapeHtml(r.description)}${r.duplicate ? ' <span class="dup-badge">duplicate</span>' : ""}</td>
+      <td><select class="row-category" data-idx="${i}">${categoryOptions.replace(`value="${r.category}"`, `value="${r.category}" selected`)}</select>${!r.duplicate && r.category !== "Other" ? '<span class="import-badge">auto</span>' : ""}</td>
       <td class="amount-col">${formatCurrency(r.amount)}</td>
     </tr>`
     )
