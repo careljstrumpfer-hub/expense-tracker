@@ -538,6 +538,12 @@ function processCSV(text) {
     if (!category && cols.parentCategoryCol !== -1) category = mapBankCategory(fields[cols.parentCategoryCol]);
     if (!category) category = categorizeDescription(description);
 
+    // Skip transfers (not real expenses)
+    if (cols.categoryCol !== -1 || cols.parentCategoryCol !== -1) {
+      const bankCat = (fields[cols.categoryCol] || fields[cols.parentCategoryCol] || "").toLowerCase();
+      if (bankCat === "transfer" || bankCat === "other income") continue;
+    }
+
     results.push({ date, description, amount, category, selected: true });
   }
 
@@ -671,6 +677,13 @@ function processPdfText(text) {
 
     // Skip deposits (positive amounts) — these are income, not expenses
     if (txAmount > 0) continue;
+
+    // Skip inter-account transfers (not real expenses)
+    const descLower = description.toLowerCase();
+    if (descLower.includes("ib transfer to") || descLower.includes("ib transfer from") ||
+        descLower.includes("payshap payment from") || descLower.includes("electronic banking payment fr") ||
+        descLower.includes("payment of insurance claims") || descLower.includes("credit transfer") ||
+        descLower.includes("electronic trf-credit")) continue;
 
     const absAmount = Math.abs(txAmount);
     if (absAmount === 0) continue;
