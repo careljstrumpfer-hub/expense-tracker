@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Expense Tracker</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0f3460">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+</head>
+<body>
+
+  <!-- Login Screen -->
+  <div id="login-screen" class="screen">
+    <div class="login-card">
+      <h1>Expense Tracker</h1>
+      <p class="subtitle" id="login-greeting"></p>
+      <div class="pin-group">
+        <label>Enter your PIN</label>
+        <input type="password" id="login-pin" inputmode="numeric" maxlength="8" placeholder="PIN" autocomplete="off">
+      </div>
+      <button class="btn-add" id="login-btn">Unlock</button>
+      <p id="login-error" class="error-msg"></p>
+    </div>
+  </div>
+
+  <!-- Setup Screen -->
+  <div id="setup-screen" class="screen" style="display:none;">
+    <div class="login-card">
+      <h1>Welcome</h1>
+      <p class="subtitle">Set up your personal expense tracker</p>
+      <div class="pin-group">
+        <label>First Name</label>
+        <input type="text" id="setup-name" placeholder="e.g. Carel" required>
+      </div>
+      <div class="pin-group">
+        <label>Surname</label>
+        <input type="text" id="setup-surname" placeholder="e.g. Strumpfer" required>
+      </div>
+      <div class="pin-group">
+        <label>Create a PIN (4-8 digits)</label>
+        <input type="password" id="setup-pin" inputmode="numeric" maxlength="8" placeholder="PIN" autocomplete="off">
+      </div>
+      <div class="pin-group">
+        <label>Confirm PIN</label>
+        <input type="password" id="setup-pin-confirm" inputmode="numeric" maxlength="8" placeholder="Confirm PIN" autocomplete="off">
+      </div>
+      <button class="btn-add" id="setup-btn">Get Started</button>
+      <p id="setup-error" class="error-msg"></p>
+    </div>
+  </div>
+
+  <!-- Main App -->
+  <div id="app-screen" class="app" style="display:none;">
+    <header>
+      <div class="header-row">
+        <div>
+          <h1>Expense Tracker</h1>
+          <p class="subtitle" id="user-greeting"></p>
+        </div>
+        <button class="btn-lock" id="lock-btn" title="Lock">&#128274;</button>
+      </div>
+    </header>
+
+    <section class="add-expense">
+      <h2>Add Expense</h2>
+      <form id="expense-form">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="description">Description</label>
+            <input type="text" id="description" placeholder="e.g. Groceries" required>
+          </div>
+          <div class="form-group">
+            <label for="amount">Amount (R)</label>
+            <input type="number" id="amount" placeholder="0.00" step="0.01" min="0.01" required>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="category">Category</label>
+            <select id="category">
+              <option value="Food">Food</option>
+              <option value="Transport">Transport</option>
+              <option value="Housing">Housing</option>
+              <option value="Utilities">Utilities</option>
+              <option value="Entertainment">Entertainment</option>
+              <option value="Shopping">Shopping</option>
+              <option value="Health">Health</option>
+              <option value="Education">Education</option>
+              <option value="Insurance">Insurance</option>
+              <option value="Fees">Fees</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="date">Date</label>
+            <input type="date" id="date" required>
+          </div>
+        </div>
+        <button type="submit" class="btn-add">Add Expense</button>
+      </form>
+    </section>
+
+    <section class="import-csv">
+      <div class="import-header" id="import-toggle">
+        <h2>Import Statement</h2>
+        <span class="toggle-arrow" id="toggle-arrow">&#9662;</span>
+      </div>
+      <div class="import-body" id="import-body" style="display:none;">
+        <p class="import-hint">Upload a CSV or PDF bank statement (Capitec, Standard Bank, FNB, Nedbank, ABSA).</p>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="import-file">Select CSV or PDF file</label>
+            <input type="file" id="import-file" accept=".csv,.txt,.pdf">
+          </div>
+        </div>
+        <div id="import-preview" style="display:none;">
+          <div class="import-stats" id="import-stats"></div>
+          <div class="import-table-wrap">
+            <table class="import-table">
+              <thead>
+                <tr>
+                  <th><input type="checkbox" id="select-all" checked></th>
+                  <th>Date</th>
+                  <th>Description</th>
+                  <th>Category</th>
+                  <th class="amount-col">Amount</th>
+                </tr>
+              </thead>
+              <tbody id="import-body-table"></tbody>
+            </table>
+          </div>
+          <div class="import-actions">
+            <button class="btn-add" id="import-confirm">Import Selected</button>
+            <button class="btn-cancel" id="import-cancel">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="summary">
+      <div class="summary-card">
+        <span class="summary-label">Today</span>
+        <span class="summary-amount" id="today-total">R0.00</span>
+      </div>
+      <div class="summary-card">
+        <span class="summary-label">This Month</span>
+        <span class="summary-amount" id="month-total">R0.00</span>
+      </div>
+      <div class="summary-card">
+        <span class="summary-label">Entries</span>
+        <span class="summary-amount" id="entry-count">0</span>
+      </div>
+    </section>
+
+    <section class="breakdown">
+      <h2>Monthly Breakdown by Category</h2>
+      <div id="category-breakdown" class="category-bars"></div>
+    </section>
+
+    <section class="insights" id="insights-section" style="display:none;">
+      <h2>Spending Insights</h2>
+      <div id="insights-content"></div>
+    </section>
+
+    <section class="expenses-list">
+      <div class="list-header">
+        <h2>Expenses</h2>
+        <div class="list-controls">
+          <select id="filter-month" title="Filter by month"></select>
+          <select id="filter-source" title="Filter by source"></select>
+          <button class="btn-export" id="export-csv-btn" title="Export CSV">CSV</button>
+          <button class="btn-export btn-docx" id="export-docx-btn" title="Export Word document">DOCX</button>
+        </div>
+      </div>
+      <div class="list-actions" id="list-actions" style="display:none;">
+        <span id="selected-info"></span>
+        <button class="btn-delete-selected" id="delete-selected-btn" style="display:none;">Delete selected</button>
+      </div>
+      <table id="expenses-table">
+        <thead>
+          <tr>
+            <th><input type="checkbox" id="select-all-expenses" title="Select all"></th>
+            <th>Date</th>
+            <th>Description</th>
+            <th>Category</th>
+            <th>Source</th>
+            <th class="amount-col">Amount</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="expenses-body"></tbody>
+      </table>
+      <p id="no-expenses" class="empty-state">No expenses yet. Add one above!</p>
+    </section>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
