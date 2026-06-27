@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Expense Tracker</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>Expense Tracker</h1>
+      <p class="subtitle">Track your daily and monthly spending</p>
+    </header>
+
+    <section class="add-expense">
+      <h2>Add Expense</h2>
+      <form id="expense-form">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="description">Description</label>
+            <input type="text" id="description" placeholder="e.g. Groceries" required>
+          </div>
+          <div class="form-group">
+            <label for="amount">Amount (R)</label>
+            <input type="number" id="amount" placeholder="0.00" step="0.01" min="0.01" required>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="category">Category</label>
+            <select id="category">
+              <option value="Food">Food</option>
+              <option value="Transport">Transport</option>
+              <option value="Housing">Housing</option>
+              <option value="Utilities">Utilities</option>
+              <option value="Entertainment">Entertainment</option>
+              <option value="Shopping">Shopping</option>
+              <option value="Health">Health</option>
+              <option value="Education">Education</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="date">Date</label>
+            <input type="date" id="date" required>
+          </div>
+        </div>
+        <button type="submit" class="btn-add">Add Expense</button>
+      </form>
+    </section>
+
+    <section class="summary">
+      <div class="summary-card">
+        <span class="summary-label">Today</span>
+        <span class="summary-amount" id="today-total">R0.00</span>
+      </div>
+      <div class="summary-card">
+        <span class="summary-label">This Month</span>
+        <span class="summary-amount" id="month-total">R0.00</span>
+      </div>
+      <div class="summary-card">
+        <span class="summary-label">Entries</span>
+        <span class="summary-amount" id="entry-count">0</span>
+      </div>
+    </section>
+
+    <section class="breakdown">
+      <h2>Monthly Breakdown by Category</h2>
+      <div id="category-breakdown" class="category-bars"></div>
+    </section>
+
+    <section class="expenses-list">
+      <div class="list-header">
+        <h2>Expenses</h2>
+        <div class="list-controls">
+          <select id="filter-month" title="Filter by month"></select>
+          <button class="btn-export" id="export-btn" title="Export to CSV">Export CSV</button>
+        </div>
+      </div>
+      <table id="expenses-table">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Description</th>
+            <th>Category</th>
+            <th class="amount-col">Amount</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="expenses-body"></tbody>
+      </table>
+      <p id="no-expenses" class="empty-state">No expenses yet. Add one above!</p>
+    </section>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
