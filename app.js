@@ -1,4 +1,5 @@
 const STORAGE_KEY = "expense_tracker_data";
+const INCOME_KEY = "expense_tracker_income";
 const PROFILE_KEY = "expense_tracker_profile";
 
 const CATEGORY_COLORS = {
@@ -46,6 +47,15 @@ function loadExpenses() {
 
 function saveExpenses(data) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+}
+
+function loadIncome() {
+  const data = localStorage.getItem(INCOME_KEY);
+  return data ? JSON.parse(data) : [];
+}
+
+function saveIncome(data) {
+  localStorage.setItem(INCOME_KEY, JSON.stringify(data));
 }
 
 function generateId() {
@@ -161,6 +171,7 @@ function unlockApp() {
 // ── Main App ────────────────────────────────────────────────
 
 let expenses = [];
+let income = [];
 let activeMonth = getMonthKey(getToday());
 let appInitialized = false;
 
@@ -169,7 +180,9 @@ function initApp() {
   appInitialized = true;
 
   expenses = loadExpenses();
+  income = loadIncome();
   dateInput.value = getToday();
+  document.getElementById("income-date").value = getToday();
   refresh();
 }
 
@@ -178,9 +191,12 @@ const descInput = document.getElementById("description");
 const amountInput = document.getElementById("amount");
 const categoryInput = document.getElementById("category");
 const dateInput = document.getElementById("date");
-const todayTotal = document.getElementById("today-total");
+const dailyAvg = document.getElementById("daily-avg");
+const monthLabel = document.getElementById("month-label");
 const monthTotal = document.getElementById("month-total");
-const entryCount = document.getElementById("entry-count");
+const monthIncome = document.getElementById("month-income");
+const monthBalance = document.getElementById("month-balance");
+const balanceCard = document.getElementById("balance-card");
 const expensesBody = document.getElementById("expenses-body");
 const noExpenses = document.getElementById("no-expenses");
 const filterMonth = document.getElementById("filter-month");
@@ -198,20 +214,24 @@ let activeSource = "all";
 let selectedIds = new Set();
 
 function updateSummary() {
-  const today = getToday();
-  const currentMonth = getMonthKey(today);
+  const monthExpenses = expenses.filter((e) => getMonthKey(e.date) === activeMonth);
+  const monthInc = income.filter((e) => getMonthKey(e.date) === activeMonth);
 
-  const todaySum = expenses
-    .filter((e) => e.date === today)
-    .reduce((sum, e) => sum + e.amount, 0);
+  const expenseSum = monthExpenses.reduce((s, e) => s + e.amount, 0);
+  const incomeSum = monthInc.reduce((s, e) => s + e.amount, 0);
+  const balance = incomeSum - expenseSum;
 
-  const monthSum = expenses
-    .filter((e) => getMonthKey(e.date) === currentMonth)
-    .reduce((sum, e) => sum + e.amount, 0);
+  // Daily average: total expenses / number of unique days with expenses
+  const days = new Set(monthExpenses.map((e) => e.date)).size;
+  const avg = days > 0 ? expenseSum / days : 0;
 
-  todayTotal.textContent = formatCurrency(todaySum);
-  monthTotal.textContent = formatCurrency(monthSum);
-  entryCount.textContent = expenses.length;
+  monthLabel.textContent = getMonthLabel(activeMonth);
+  dailyAvg.textContent = formatCurrency(avg);
+  monthTotal.textContent = formatCurrency(expenseSum);
+  monthIncome.textContent = formatCurrency(incomeSum);
+  monthBalance.textContent = (balance >= 0 ? "" : "-") + formatCurrency(Math.abs(balance));
+
+  balanceCard.className = "summary-card " + (balance >= 0 ? "balance-positive" : "balance-negative");
 }
 
 function updateMonthFilter() {
@@ -342,6 +362,7 @@ function renderExpenses() {
 
 function refresh() {
   saveExpenses(expenses);
+  saveIncome(income);
   selectedIds.clear();
   updateSummary();
   updateMonthFilter();
@@ -367,6 +388,29 @@ form.addEventListener("submit", (e) => {
   amountInput.value = "";
   dateInput.value = getToday();
   descInput.focus();
+});
+
+// ── Income Form ─────────────────────────────────────────────
+
+document.getElementById("income-toggle").addEventListener("click", () => {
+  const f = document.getElementById("income-form");
+  f.style.display = f.style.display === "none" ? "block" : "none";
+});
+
+document.getElementById("income-btn").addEventListener("click", () => {
+  const desc = document.getElementById("income-desc").value.trim();
+  const amt = parseFloat(document.getElementById("income-amount").value);
+  const date = document.getElementById("income-date").value;
+
+  if (!desc || !amt || !date) return;
+
+  income.push({ id: generateId(), description: desc, amount: amt, date });
+  activeMonth = getMonthKey(date);
+  refresh();
+
+  document.getElementById("income-desc").value = "";
+  document.getElementById("income-amount").value = "";
+  document.getElementById("income-date").value = getToday();
 });
 
 // ── Receipt Scanner ─────────────────────────────────────────
@@ -639,6 +683,7 @@ deleteSelectedBtn.addEventListener("click", () => {
 filterMonth.addEventListener("change", () => {
   activeMonth = filterMonth.value;
   selectedIds.clear();
+  updateSummary();
   updateCategoryBreakdown();
   generateInsights();
   renderExpenses();

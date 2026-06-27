@@ -117,6 +117,28 @@
         <input type="file" id="receipt-input" accept="image/*" capture="environment" style="display:none;">
         <div id="scan-status" class="scan-status" style="display:none;"></div>
       </form>
+      <div class="income-toggle" id="income-toggle">+ Add Income</div>
+      <div class="income-form" id="income-form" style="display:none;">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="income-desc">Description</label>
+            <input type="text" id="income-desc" placeholder="e.g. Salary">
+          </div>
+          <div class="form-group">
+            <label for="income-amount">Amount (R)</label>
+            <input type="number" id="income-amount" placeholder="0.00" step="0.01" min="0.01">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="income-date">Date</label>
+            <input type="date" id="income-date">
+          </div>
+          <div class="form-group" style="justify-content:flex-end;">
+            <button type="button" class="btn-income" id="income-btn">Add Income</button>
+          </div>
+        </div>
+      </div>
     </section>
 
     <section class="import-csv">
@@ -158,16 +180,20 @@
 
     <section class="summary">
       <div class="summary-card">
-        <span class="summary-label">Today</span>
-        <span class="summary-amount" id="today-total">R0.00</span>
+        <span class="summary-label">Daily Average</span>
+        <span class="summary-amount" id="daily-avg">R0.00</span>
       </div>
       <div class="summary-card">
-        <span class="summary-label">This Month</span>
+        <span class="summary-label" id="month-label">This Month</span>
         <span class="summary-amount" id="month-total">R0.00</span>
       </div>
-      <div class="summary-card">
-        <span class="summary-label">Entries</span>
-        <span class="summary-amount" id="entry-count">0</span>
+      <div class="summary-card card-income">
+        <span class="summary-label">Income</span>
+        <span class="summary-amount" id="month-income">R0.00</span>
+      </div>
+      <div class="summary-card" id="balance-card">
+        <span class="summary-label">Balance</span>
+        <span class="summary-amount" id="month-balance">R0.00</span>
       </div>
     </section>
 

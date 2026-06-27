@@ -236,6 +236,43 @@ h2 {
   background: #16213e;
 }
 
+.income-toggle {
+  margin-top: 12px;
+  text-align: center;
+  color: #10b981;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 6px;
+}
+
+.income-toggle:hover {
+  text-decoration: underline;
+}
+
+.income-form {
+  margin-top: 10px;
+  padding-top: 12px;
+  border-top: 1px dashed #e5e7eb;
+}
+
+.btn-income {
+  width: 100%;
+  padding: 10px;
+  background: #10b981;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-income:hover {
+  background: #059669;
+}
+
 .btn-scan {
   padding: 12px 18px;
   background: #10b981;
@@ -345,6 +382,18 @@ h2 {
   font-size: 1.3rem;
   font-weight: 700;
   color: #0f3460;
+}
+
+.card-income .summary-amount {
+  color: #10b981;
+}
+
+.balance-positive .summary-amount {
+  color: #10b981;
+}
+
+.balance-negative .summary-amount {
+  color: #ef4444;
 }
 
 /* Import */
