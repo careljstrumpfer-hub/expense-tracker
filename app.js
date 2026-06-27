@@ -1,4 +1,5 @@
 const STORAGE_KEY = "expense_tracker_data";
+const PROFILE_KEY = "expense_tracker_profile";
 
 const CATEGORY_COLORS = {
   Food: "#f59e0b",
@@ -9,16 +10,42 @@ const CATEGORY_COLORS = {
   Shopping: "#10b981",
   Health: "#ef4444",
   Education: "#06b6d4",
+  Insurance: "#f97316",
+  Fees: "#94a3b8",
   Other: "#6b7280",
 };
+
+// ── Crypto Utilities ────────────────────────────────────────
+
+async function hashPin(pin) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(pin + "expense_tracker_salt_v1");
+  const hash = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(hash))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+// ── Profile Management ──────────────────────────────────────
+
+function getProfile() {
+  const data = localStorage.getItem(PROFILE_KEY);
+  return data ? JSON.parse(data) : null;
+}
+
+function saveProfile(profile) {
+  localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+}
+
+// ── Data Helpers ────────────────────────────────────────────
 
 function loadExpenses() {
   const data = localStorage.getItem(STORAGE_KEY);
   return data ? JSON.parse(data) : [];
 }
 
-function saveExpenses(expenses) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(expenses));
+function saveExpenses(data) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 }
 
 function generateId() {
@@ -26,7 +53,7 @@ function generateId() {
 }
 
 function formatCurrency(amount) {
-  return "R" + Number(amount).toFixed(2);
+  return "R" + Number(amount).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 }
 
 function formatDate(dateStr) {
@@ -48,7 +75,104 @@ function getMonthLabel(monthKey) {
   return date.toLocaleDateString("en-ZA", { month: "long", year: "numeric" });
 }
 
-// DOM elements
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// ── Login / Setup ───────────────────────────────────────────
+
+const loginScreen = document.getElementById("login-screen");
+const setupScreen = document.getElementById("setup-screen");
+const appScreen = document.getElementById("app-screen");
+
+function showScreen(screen) {
+  loginScreen.style.display = "none";
+  setupScreen.style.display = "none";
+  appScreen.style.display = "none";
+  screen.style.display = screen === appScreen ? "block" : "flex";
+}
+
+(function initAuth() {
+  const profile = getProfile();
+  if (!profile) {
+    showScreen(setupScreen);
+  } else {
+    document.getElementById("login-greeting").textContent =
+      `Welcome back, ${profile.name}`;
+    showScreen(loginScreen);
+    document.getElementById("login-pin").focus();
+  }
+})();
+
+document.getElementById("setup-btn").addEventListener("click", async () => {
+  const name = document.getElementById("setup-name").value.trim();
+  const surname = document.getElementById("setup-surname").value.trim();
+  const pin = document.getElementById("setup-pin").value;
+  const pinConfirm = document.getElementById("setup-pin-confirm").value;
+  const err = document.getElementById("setup-error");
+
+  if (!name || !surname) { err.textContent = "Please enter your name and surname."; return; }
+  if (pin.length < 4) { err.textContent = "PIN must be at least 4 digits."; return; }
+  if (pin !== pinConfirm) { err.textContent = "PINs do not match."; return; }
+
+  const pinHash = await hashPin(pin);
+  saveProfile({ name, surname, pinHash });
+  unlockApp();
+});
+
+document.getElementById("login-btn").addEventListener("click", async () => {
+  const pin = document.getElementById("login-pin").value;
+  const err = document.getElementById("login-error");
+  const profile = getProfile();
+
+  if (!pin) { err.textContent = "Please enter your PIN."; return; }
+
+  const pinHash = await hashPin(pin);
+  if (pinHash !== profile.pinHash) {
+    err.textContent = "Incorrect PIN. Try again.";
+    document.getElementById("login-pin").value = "";
+    return;
+  }
+
+  unlockApp();
+});
+
+document.getElementById("login-pin").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") document.getElementById("login-btn").click();
+});
+
+document.getElementById("lock-btn").addEventListener("click", () => {
+  document.getElementById("login-pin").value = "";
+  document.getElementById("login-error").textContent = "";
+  showScreen(loginScreen);
+  document.getElementById("login-pin").focus();
+});
+
+function unlockApp() {
+  const profile = getProfile();
+  document.getElementById("user-greeting").textContent =
+    `${profile.name} ${profile.surname}'s expenses`;
+  showScreen(appScreen);
+  initApp();
+}
+
+// ── Main App ────────────────────────────────────────────────
+
+let expenses = [];
+let activeMonth = getMonthKey(getToday());
+let appInitialized = false;
+
+function initApp() {
+  if (appInitialized) return;
+  appInitialized = true;
+
+  expenses = loadExpenses();
+  dateInput.value = getToday();
+  refresh();
+}
+
 const form = document.getElementById("expense-form");
 const descInput = document.getElementById("description");
 const amountInput = document.getElementById("amount");
@@ -60,15 +184,9 @@ const entryCount = document.getElementById("entry-count");
 const expensesBody = document.getElementById("expenses-body");
 const noExpenses = document.getElementById("no-expenses");
 const filterMonth = document.getElementById("filter-month");
-const exportBtn = document.getElementById("export-btn");
+const exportCsvBtn = document.getElementById("export-csv-btn");
+const exportDocxBtn = document.getElementById("export-docx-btn");
 const categoryBreakdown = document.getElementById("category-breakdown");
-
-// Set default date to today
-dateInput.value = getToday();
-
-// State
-let expenses = loadExpenses();
-let activeMonth = getMonthKey(getToday());
 
 function updateSummary() {
   const today = getToday();
@@ -100,10 +218,7 @@ function updateMonthFilter() {
   }
 
   filterMonth.innerHTML = months
-    .map(
-      (m) =>
-        `<option value="${m}" ${m === activeMonth ? "selected" : ""}>${getMonthLabel(m)}</option>`
-    )
+    .map((m) => `<option value="${m}" ${m === activeMonth ? "selected" : ""}>${getMonthLabel(m)}</option>`)
     .join("");
 }
 
@@ -132,8 +247,7 @@ function updateCategoryBreakdown() {
         <div class="category-bar" style="width: ${(amount / max) * 100}%; background: ${CATEGORY_COLORS[cat] || "#6b7280"}"></div>
       </div>
       <span class="category-value">${formatCurrency(amount)}</span>
-    </div>
-  `
+    </div>`
     )
     .join("");
 }
@@ -159,16 +273,9 @@ function renderExpenses() {
       <td><span class="category-tag" style="background: ${CATEGORY_COLORS[e.category] || "#6b7280"}20; color: ${CATEGORY_COLORS[e.category] || "#6b7280"}">${e.category}</span></td>
       <td class="expense-amount">${formatCurrency(e.amount)}</td>
       <td><button class="btn-delete" data-id="${e.id}" title="Delete">&times;</button></td>
-    </tr>
-  `
+    </tr>`
     )
     .join("");
-}
-
-function escapeHtml(str) {
-  const div = document.createElement("div");
-  div.textContent = str;
-  return div.innerHTML;
 }
 
 function refresh() {
@@ -179,157 +286,123 @@ function refresh() {
   renderExpenses();
 }
 
-// Add expense
 form.addEventListener("submit", (e) => {
   e.preventDefault();
-
-  const expense = {
+  expenses.push({
     id: generateId(),
     description: descInput.value.trim(),
     amount: parseFloat(amountInput.value),
     category: categoryInput.value,
     date: dateInput.value,
-  };
-
-  expenses.push(expense);
-  activeMonth = getMonthKey(expense.date);
+  });
+  activeMonth = getMonthKey(dateInput.value);
   refresh();
-
   descInput.value = "";
   amountInput.value = "";
   dateInput.value = getToday();
   descInput.focus();
 });
 
-// Delete expense
 expensesBody.addEventListener("click", (e) => {
   const btn = e.target.closest(".btn-delete");
   if (!btn) return;
-
-  const id = btn.dataset.id;
-  expenses = expenses.filter((exp) => exp.id !== id);
+  expenses = expenses.filter((exp) => exp.id !== btn.dataset.id);
   refresh();
 });
 
-// Filter by month
 filterMonth.addEventListener("change", () => {
   activeMonth = filterMonth.value;
   updateCategoryBreakdown();
   renderExpenses();
 });
 
-// Export CSV
-exportBtn.addEventListener("click", () => {
-  const filtered = expenses
-    .filter((e) => getMonthKey(e.date) === activeMonth)
-    .sort((a, b) => a.date.localeCompare(b.date));
-
-  if (filtered.length === 0) return;
-
-  const header = "Date,Description,Category,Amount";
-  const rows = filtered.map(
-    (e) =>
-      `${e.date},"${e.description.replace(/"/g, '""')}",${e.category},${e.amount.toFixed(2)}`
-  );
-
-  const csv = [header, ...rows].join("\n");
-  const blob = new Blob([csv], { type: "text/csv" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `expenses-${activeMonth}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
-});
-
-// ── CSV Import ──────────────────────────────────────────────
+// ── Category Keywords ───────────────────────────────────────
 
 const CATEGORY_KEYWORDS = {
   Food: [
     "spar", "checkers", "pick n pay", "pick 'n pay", "woolworths", "food",
     "shoprite", "kfc", "mcdonalds", "mcdonald", "steers", "nandos", "nando's",
     "debonairs", "pizza", "burger", "chicken", "restaurant", "cafe", "bakery",
-    "uber eats", "mr delivery", "takealot food", "fruit", "veg", "meat",
-    "grocery", "groceries", "wimpy", "ocean basket", "spur", "rocomamas",
-    "fishaways", "galito", "romans pizza", "hungry lion", "eat"
+    "uber eats", "mr delivery", "fruit", "veg", "meat", "pnp ", "pnp crp",
+    "pnp fam", "grocery", "groceries", "wimpy", "ocean basket", "spur",
+    "rocomamas", "fishaways", "galito", "romans pizza", "hungry lion",
+    "diemysticpizz", "broken po", "varsitycafe", "sincereasiami",
+    "bk mooi", "burger king",
   ],
   Transport: [
     "uber", "bolt", "fuel", "petrol", "diesel", "engen", "shell", "caltex",
     "sasol", "total", "bp ", "garage", "parking", "e-toll", "toll", "gautrain",
     "myciti", "taxi", "car wash", "carwash", "tyre", "tire", "vehicle",
-    "licence renewal", "traffic fine", "avis", "hertz", "drive"
+    "potch truck", "boskop vulsta",
   ],
   Housing: [
     "rent", "bond", "mortgage", "levy", "levies", "estate agent", "property",
-    "maintenance", "home", "lease", "tenant", "landlord", "strata"
+    "maintenance", "home", "lease", "tenant", "landlord", "plumbers depo",
+    "merafong", "sbsa hl",
   ],
   Utilities: [
     "electricity", "water", "eskom", "city of", "municipal", "prepaid elec",
     "telkom", "fibre", "internet", "wifi", "wi-fi", "vodacom", "mtn", "cell c",
-    "rain", "dstv", "multichoice", "showmax", "netflix", "spotify",
-    "apple music", "youtube", "airtime", "data bundle", "cellphone"
+    "rain ", "dstv", "multichoice", "showmax", "netflix", "spotify",
+    "apple music", "youtube", "airtime", "data bundle", "cellphone",
   ],
   Entertainment: [
     "ster-kinekor", "nu metro", "cinema", "movie", "concert", "show",
     "tickets", "computicket", "webtickets", "bar ", "pub ", "club ",
     "tavern", "lounge", "game", "steam", "playstation", "xbox", "nintendo",
-    "subscription", "twitch"
+    "tiktok", "google tiktok", "koer afrikaans", "coursiv",
   ],
   Shopping: [
     "takealot", "amazon", "shein", "temu", "mr price", "ackermans", "pep",
     "jet ", "edgars", "foschini", "cotton on", "h&m", "zara", "truworths",
-    "clothing", "shoes", "fashion", "mall", "store", "shop", "clicks",
-    "dischem", "dis-chem", "makro", "game ", "builder", "cashbuild",
-    "leroy merlin"
+    "clothing", "shoes", "fashion", "clicks", "dischem", "dis-chem",
+    "makro", "cutting edge", "bex potch", "impalaslaghui",
+    "c*mahems",
   ],
   Health: [
     "pharmacy", "doctor", "dr ", "medical", "hospital", "clinic", "dental",
     "dentist", "optom", "physio", "pathology", "ampath", "lancet",
-    "discovery health", "medihelp", "gems", "bonitas", "momentum health",
-    "dispens"
+    "potch medi", "disc prem", "stratum",
   ],
   Education: [
-    "school", "university", "unisa", "college", "tuition", "fees",
+    "school", "university", "unisa", "college", "tuition",
     "textbook", "stationery", "udemy", "coursera", "skillshare", "course",
-    "training", "student", "bursary"
+    "training", "student", "bursary",
+  ],
+  Insurance: [
+    "insurance", "ins prem", "disclife", "safireins", "saffar", "legalex",
+  ],
+  Fees: [
+    "fee", "bank charge", "#international", "honouring", "ucount",
+    "admin fee", "excess interest", "debicheck collection",
+    "decline fee", "processing fee", "notification fee",
   ],
 };
 
 function categorizeDescription(description) {
   const lower = description.toLowerCase();
   for (const [category, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
-    if (keywords.some((kw) => lower.includes(kw))) {
-      return category;
-    }
+    if (keywords.some((kw) => lower.includes(kw))) return category;
   }
   return "Other";
 }
+
+// ── CSV Parsing ─────────────────────────────────────────────
 
 function parseCSVLine(line) {
   const fields = [];
   let current = "";
   let inQuotes = false;
-
   for (let i = 0; i < line.length; i++) {
     const ch = line[i];
     if (inQuotes) {
-      if (ch === '"' && line[i + 1] === '"') {
-        current += '"';
-        i++;
-      } else if (ch === '"') {
-        inQuotes = false;
-      } else {
-        current += ch;
-      }
+      if (ch === '"' && line[i + 1] === '"') { current += '"'; i++; }
+      else if (ch === '"') inQuotes = false;
+      else current += ch;
     } else {
-      if (ch === '"') {
-        inQuotes = true;
-      } else if (ch === ",") {
-        fields.push(current.trim());
-        current = "";
-      } else {
-        current += ch;
-      }
+      if (ch === '"') inQuotes = true;
+      else if (ch === ",") { fields.push(current.trim()); current = ""; }
+      else current += ch;
     }
   }
   fields.push(current.trim());
@@ -338,50 +411,19 @@ function parseCSVLine(line) {
 
 function parseDate(raw) {
   const cleaned = raw.replace(/['"]/g, "").trim();
-
-  // yyyy-mm-dd with optional time (e.g. 2026-05-01 03:57)
   let m = cleaned.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
   if (m) return `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`;
-
-  // dd-mm-yyyy or dd/mm/yyyy with optional time
   m = cleaned.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
   if (m) return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
-
-  // dd Mon yyyy or dd-Mon-yyyy (e.g. 15 Jun 2025, 15-Jun-2025)
-  m = cleaned.match(/^(\d{1,2})[\s-](\w{3,9})[\s-](\d{4})/);
+  m = cleaned.match(/^(\d{1,2})[\s-](\w{3,9})[\s-](\d{2,4})/);
   if (m) {
-    const months = { jan:1, feb:2, mar:3, apr:4, may:5, jun:6, jul:7, aug:8, sep:9, oct:10, nov:11, dec:12,
-      january:1, february:2, march:3, april:4, june:6, july:7, august:8, september:9, october:10, november:11, december:12 };
-    const mon = months[m[2].toLowerCase()];
-    if (mon) return `${m[3]}-${String(mon).padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+    const months = { jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12 };
+    const mon = months[m[2].toLowerCase().slice(0, 3)];
+    let year = parseInt(m[3]);
+    if (year < 100) year += 2000;
+    if (mon) return `${year}-${String(mon).padStart(2, "0")}-${m[1].padStart(2, "0")}`;
   }
-
   return null;
-}
-
-function detectColumns(headers) {
-  const h = headers.map((s) => s.toLowerCase().trim());
-
-  let dateCol = -1, descCol = -1, amountCol = -1;
-  let moneyOutCol = -1, moneyInCol = -1, feeCol = -1;
-  let debitCol = -1, creditCol = -1;
-  let categoryCol = -1, parentCategoryCol = -1;
-
-  h.forEach((col, i) => {
-    const norm = col.replace(/[^a-z0-9 ]/g, "").trim();
-    if (dateCol === -1 && (norm.includes("posting date") || norm.includes("transaction date") || norm === "date")) dateCol = i;
-    if (descCol === -1 && (norm === "description" || norm.includes("narrative") || norm.includes("detail"))) descCol = i;
-    if (norm === "amount" || norm === "transaction amount") amountCol = i;
-    if (norm === "money out") moneyOutCol = i;
-    if (norm === "money in") moneyInCol = i;
-    if (norm === "fee") feeCol = i;
-    if (norm === "debit") debitCol = i;
-    if (norm === "credit") creditCol = i;
-    if (norm === "category") categoryCol = i;
-    if (norm === "parent category") parentCategoryCol = i;
-  });
-
-  return { dateCol, descCol, amountCol, moneyOutCol, moneyInCol, feeCol, debitCol, creditCol, categoryCol, parentCategoryCol };
 }
 
 function parseAmount(raw) {
@@ -395,19 +437,45 @@ function mapBankCategory(bankCategory) {
   if (!bankCategory) return null;
   const lower = bankCategory.toLowerCase().trim();
   const mapping = {
-    "food": "Food", "groceries": "Food", "restaurant": "Food", "fast food": "Food", "takeout": "Food",
-    "transport": "Transport", "fuel": "Transport", "parking": "Transport", "tolls": "Transport", "ride hailing": "Transport",
-    "housing": "Housing", "rent": "Housing", "mortgage": "Housing", "property": "Housing",
+    "food": "Food", "groceries": "Food", "restaurant": "Food",
+    "transport": "Transport", "fuel": "Transport", "parking": "Transport",
+    "housing": "Housing", "rent": "Housing", "mortgage": "Housing",
     "utilities": "Utilities", "electricity": "Utilities", "water": "Utilities",
-    "internet": "Utilities", "cellphone": "Utilities", "communication": "Utilities", "mobile": "Utilities",
-    "entertainment": "Entertainment", "digital subscriptions": "Entertainment", "streaming": "Entertainment", "online store": "Entertainment",
-    "shopping": "Shopping", "clothing": "Shopping", "retail": "Shopping",
-    "medical": "Health", "medical aid": "Health", "pharmacy": "Health", "health": "Health",
-    "education": "Education", "tuition": "Education", "school": "Education",
-    "fees": "Other", "transfer": "Other", "loans": "Other", "loan": "Other",
-    "legal fees": "Other", "personal & family": "Other", "interest": "Other",
+    "internet": "Utilities", "cellphone": "Utilities", "communication": "Utilities",
+    "entertainment": "Entertainment", "digital subscriptions": "Entertainment", "online store": "Entertainment",
+    "shopping": "Shopping", "clothing": "Shopping",
+    "medical": "Health", "medical aid": "Health", "health": "Health",
+    "education": "Education",
+    "insurance premium": "Insurance",
+    "fees": "Fees",
+    "legal fees": "Other", "transfer": "Other", "loans": "Other",
+    "personal & family": "Other", "interest": "Other",
   };
   return mapping[lower] || null;
+}
+
+function detectColumns(headers) {
+  const h = headers.map((s) => s.toLowerCase().trim());
+  let dateCol = -1, descCol = -1, amountCol = -1;
+  let moneyOutCol = -1, moneyInCol = -1, feeCol = -1;
+  let debitCol = -1, creditCol = -1;
+  let categoryCol = -1, parentCategoryCol = -1;
+
+  h.forEach((col, i) => {
+    const norm = col.replace(/[^a-z0-9 ]/g, "").trim();
+    if (dateCol === -1 && (norm.includes("posting date") || norm.includes("transaction date") || norm === "date")) dateCol = i;
+    if (descCol === -1 && (norm === "description" || norm.includes("narrative") || norm.includes("detail"))) descCol = i;
+    if (norm === "amount" || norm === "transaction amount") amountCol = i;
+    if (norm === "money out") moneyOutCol = i;
+    if (norm === "money in") moneyInCol = i;
+    if (norm === "fee") feeCol = i;
+    if (norm === "debit" || norm === "payments") debitCol = i;
+    if (norm === "credit" || norm === "deposits") creditCol = i;
+    if (norm === "category") categoryCol = i;
+    if (norm === "parent category") parentCategoryCol = i;
+  });
+
+  return { dateCol, descCol, amountCol, moneyOutCol, moneyInCol, feeCol, debitCol, creditCol, categoryCol, parentCategoryCol };
 }
 
 function processCSV(text) {
@@ -419,7 +487,7 @@ function processCSV(text) {
     const fields = parseCSVLine(lines[i]);
     if (fields.length >= 3) {
       const lower = fields.map((f) => f.toLowerCase()).join(" ");
-      if (lower.includes("date") || lower.includes("description") || lower.includes("amount") || lower.includes("debit") || lower.includes("money") || lower.includes("narrative")) {
+      if (lower.includes("date") || lower.includes("description") || lower.includes("amount") || lower.includes("money") || lower.includes("narrative")) {
         headerIndex = i;
         break;
       }
@@ -431,19 +499,7 @@ function processCSV(text) {
   if (dataLines.length === 0) return [];
 
   const cols = detectColumns(headers);
-
-  if (cols.dateCol === -1 && cols.descCol === -1) {
-    // No headers matched — try treating first row as data, detect date columns from values
-    const firstRow = parseCSVLine(lines[0]);
-    let fallbackDateCol = -1;
-    firstRow.forEach((val, i) => { if (fallbackDateCol === -1 && parseDate(val)) fallbackDateCol = i; });
-    if (fallbackDateCol === -1) return [];
-  }
-
-  // Must have at least a date column
   if (cols.dateCol === -1) return [];
-
-  // Must have some amount column
   const hasAmounts = cols.amountCol !== -1 || cols.moneyOutCol !== -1 || cols.debitCol !== -1 || cols.feeCol !== -1;
   if (!hasAmounts && cols.descCol === -1) return [];
 
@@ -458,7 +514,6 @@ function processCSV(text) {
     const description = (cols.descCol !== -1 ? fields[cols.descCol] : "").trim();
     if (!description) continue;
 
-    // Calculate total expense: Money Out + Fee, or Amount, or Debit
     let amount = 0;
     if (cols.moneyOutCol !== -1) {
       const out = parseAmount(fields[cols.moneyOutCol]);
@@ -476,43 +531,142 @@ function processCSV(text) {
       const deb = parseAmount(fields[cols.debitCol]);
       if (deb) amount = Math.abs(deb);
     }
+    if (amount === 0) continue;
 
-    // Skip rows with no expense amount (income-only, declined transactions)
-    if (amount === 0) {
-      // Check if it's income-only (Money In with no Money Out/Fee)
-      if (cols.moneyInCol !== -1 && parseAmount(fields[cols.moneyInCol])) continue;
-      continue;
-    }
-
-    // Use bank's category if available, fall back to keyword matching
     let category = null;
-    if (cols.categoryCol !== -1) {
-      category = mapBankCategory(fields[cols.categoryCol]);
-    }
-    if (!category && cols.parentCategoryCol !== -1) {
-      category = mapBankCategory(fields[cols.parentCategoryCol]);
-    }
-    if (!category) {
-      category = categorizeDescription(description);
-    }
+    if (cols.categoryCol !== -1) category = mapBankCategory(fields[cols.categoryCol]);
+    if (!category && cols.parentCategoryCol !== -1) category = mapBankCategory(fields[cols.parentCategoryCol]);
+    if (!category) category = categorizeDescription(description);
 
-    results.push({
-      date,
-      description,
-      amount,
-      category,
-      selected: true,
-    });
+    results.push({ date, description, amount, category, selected: true });
   }
 
   return results;
 }
 
-// Import DOM elements
+// ── PDF Parsing (Standard Bank) ─────────────────────────────
+
+async function extractPdfText(file) {
+  const arrayBuffer = await file.arrayBuffer();
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  let fullText = "";
+
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    const lines = [];
+    let currentLine = "";
+    let lastY = null;
+
+    for (const item of content.items) {
+      if (lastY !== null && Math.abs(item.transform[5] - lastY) > 3) {
+        lines.push(currentLine.trim());
+        currentLine = "";
+      }
+      currentLine += item.str;
+      lastY = item.transform[5];
+    }
+    if (currentLine.trim()) lines.push(currentLine.trim());
+    fullText += lines.join("\n") + "\n";
+  }
+
+  return fullText;
+}
+
+function processPdfText(text) {
+  const lines = text.split("\n");
+  const dateRegex = /^(\d{2})\s(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s(\d{2})\s/i;
+  const amountRegex = /-?[\d,]+\.\d{2}/g;
+  const monthMap = { jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12 };
+
+  const transactions = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+    const dateMatch = line.match(dateRegex);
+
+    if (!dateMatch) { i++; continue; }
+
+    if (line.includes("STATEMENT OPENING BALANCE") || line.includes("STATEMENT CLOSING BALANCE")) { i++; continue; }
+
+    const day = dateMatch[1];
+    const mon = monthMap[dateMatch[2].toLowerCase()];
+    const year = 2000 + parseInt(dateMatch[3]);
+    const date = `${year}-${String(mon).padStart(2, "0")}-${day}`;
+
+    const afterDate = line.slice(dateMatch[0].length);
+    const amounts = [...afterDate.matchAll(amountRegex)].map((m) => ({
+      value: parseFloat(m[0].replace(/,/g, "")),
+      index: m.index,
+    }));
+
+    if (amounts.length < 1) { i++; continue; }
+
+    let txAmount, descEnd;
+    if (amounts.length >= 2) {
+      txAmount = amounts[amounts.length - 2].value;
+      descEnd = amounts[amounts.length - 2].index;
+    } else {
+      txAmount = amounts[0].value;
+      descEnd = amounts[0].index;
+    }
+
+    let description = afterDate.slice(0, descEnd).trim();
+    description = description.replace(/\s+5326\*\d+\s+\d{2}\s\w{3}$/, "").trim();
+    description = description.replace(/\s+5326\*\d+$/, "").trim();
+
+    // Collect continuation lines (transaction type)
+    let type = "";
+    i++;
+    while (i < lines.length && !lines[i].match(dateRegex)) {
+      const cl = lines[i].trim();
+      if (!cl || cl.includes("Standard Bank") || cl.includes("Reg. No.") ||
+          cl.includes("Code of Banking") || cl.includes("Customer Care") ||
+          cl.includes("Website:") || cl.includes("Transaction details") ||
+          cl.includes("Account number") || cl.includes("Date Description") ||
+          cl.match(/^Pg \d+ of/) || cl.match(/^\d{6}$/) || cl === "MOOIRIVIER" ||
+          cl.match(/^From:/) || cl.match(/^To:/) || cl.match(/^\d{2} \w{3} \d{4}$/) ||
+          cl.match(/^Account holder/) || cl.match(/^Product name/) ||
+          cl.match(/^Available Balance/)) {
+        i++;
+        continue;
+      }
+      type = cl;
+      i++;
+      break;
+    }
+
+    if (type) description = description + " — " + type;
+
+    if (txAmount >= 0 && !description.toLowerCase().includes("fee") && !description.toLowerCase().includes("charge")) {
+      continue;
+    }
+
+    const absAmount = Math.abs(txAmount);
+    if (absAmount === 0) continue;
+
+    transactions.push({
+      date,
+      description,
+      amount: absAmount,
+      category: categorizeDescription(description),
+      selected: true,
+    });
+  }
+
+  return transactions;
+}
+
+// ── Import UI ───────────────────────────────────────────────
+
 const importToggle = document.getElementById("import-toggle");
-const importBody = document.getElementById("import-body");
+const importBodyEl = document.getElementById("import-body");
 const toggleArrow = document.getElementById("toggle-arrow");
-const csvFileInput = document.getElementById("csv-file");
+const importFileInput = document.getElementById("import-file");
 const importPreview = document.getElementById("import-preview");
 const importStats = document.getElementById("import-stats");
 const importBodyTable = document.getElementById("import-body-table");
@@ -523,29 +677,45 @@ const selectAll = document.getElementById("select-all");
 let importedRows = [];
 
 importToggle.addEventListener("click", () => {
-  const visible = importBody.style.display !== "none";
-  importBody.style.display = visible ? "none" : "block";
+  const visible = importBodyEl.style.display !== "none";
+  importBodyEl.style.display = visible ? "none" : "block";
   toggleArrow.classList.toggle("open", !visible);
 });
 
-csvFileInput.addEventListener("change", (e) => {
+importFileInput.addEventListener("change", async (e) => {
   const file = e.target.files[0];
   if (!file) return;
 
-  const reader = new FileReader();
-  reader.onload = (ev) => {
-    importedRows = processCSV(ev.target.result);
-    if (importedRows.length === 0) {
-      importStats.innerHTML = '<span style="color:#ef4444">Could not parse any expenses from this file. Make sure it has date, description, and amount columns.</span>';
-      importPreview.style.display = "block";
-      importBodyTable.innerHTML = "";
-      importConfirm.style.display = "none";
+  const isPdf = file.name.toLowerCase().endsWith(".pdf");
+
+  if (isPdf) {
+    importStats.innerHTML = '<span class="loading-msg">Reading PDF...</span>';
+    importPreview.style.display = "block";
+    importBodyTable.innerHTML = "";
+    importConfirm.style.display = "none";
+
+    try {
+      const text = await extractPdfText(file);
+      importedRows = processPdfText(text);
+    } catch (err) {
+      importStats.innerHTML = `<span style="color:#ef4444">Failed to read PDF: ${err.message}</span>`;
       return;
     }
-    importConfirm.style.display = "";
-    renderImportPreview();
-  };
-  reader.readAsText(file);
+  } else {
+    const text = await file.text();
+    importedRows = processCSV(text);
+  }
+
+  if (importedRows.length === 0) {
+    importStats.innerHTML = '<span style="color:#ef4444">Could not parse any expenses from this file.</span>';
+    importPreview.style.display = "block";
+    importBodyTable.innerHTML = "";
+    importConfirm.style.display = "none";
+    return;
+  }
+
+  importConfirm.style.display = "";
+  renderImportPreview();
 });
 
 function renderImportPreview() {
@@ -557,7 +727,7 @@ function renderImportPreview() {
   const categories = [...new Set(importedRows.map((r) => r.category))];
 
   importStats.innerHTML = `
-    <span><span class="import-stat">${importedRows.length}</span> transactions found</span>
+    <span><span class="import-stat">${importedRows.length}</span> transactions</span>
     <span><span class="import-stat">${selectedCount}</span> selected</span>
     <span>Total: <span class="import-stat">${formatCurrency(totalAmount)}</span></span>
     <span><span class="import-stat">${categories.length}</span> categories</span>
@@ -574,11 +744,9 @@ function renderImportPreview() {
       <td><input type="checkbox" class="row-check" data-idx="${i}" ${r.selected ? "checked" : ""}></td>
       <td class="expense-date">${formatDate(r.date)}</td>
       <td class="desc-cell" title="${escapeHtml(r.description)}">${escapeHtml(r.description)}</td>
-      <td><select class="row-category" data-idx="${i}">${categoryOptions.replace(`value="${r.category}"`, `value="${r.category}" selected`)}
-      </select>${r.category !== "Other" ? '<span class="import-badge">auto</span>' : ""}</td>
+      <td><select class="row-category" data-idx="${i}">${categoryOptions.replace(`value="${r.category}"`, `value="${r.category}" selected`)}</select>${r.category !== "Other" ? '<span class="import-badge">auto</span>' : ""}</td>
       <td class="amount-col">${formatCurrency(r.amount)}</td>
-    </tr>
-  `
+    </tr>`
     )
     .join("");
 }
@@ -591,7 +759,6 @@ selectAll.addEventListener("change", () => {
 importBodyTable.addEventListener("change", (e) => {
   const idx = parseInt(e.target.dataset.idx);
   if (isNaN(idx)) return;
-
   if (e.target.classList.contains("row-check")) {
     importedRows[idx].selected = e.target.checked;
     renderImportPreview();
@@ -619,18 +786,124 @@ importConfirm.addEventListener("click", () => {
   refresh();
 
   importedRows = [];
-  csvFileInput.value = "";
+  importFileInput.value = "";
   importPreview.style.display = "none";
-  importStats.innerHTML = `<span style="color:#10b981;font-weight:600">Successfully imported ${toImport.length} expenses!</span>`;
+  importStats.innerHTML = `<span style="color:#10b981;font-weight:600">Imported ${toImport.length} expenses!</span>`;
   setTimeout(() => { importStats.innerHTML = ""; }, 3000);
 });
 
 importCancel.addEventListener("click", () => {
   importedRows = [];
-  csvFileInput.value = "";
+  importFileInput.value = "";
   importPreview.style.display = "none";
   importStats.innerHTML = "";
 });
 
-// Initial render
-refresh();
+// ── CSV Export ───────────────────────────────────────────────
+
+exportCsvBtn.addEventListener("click", () => {
+  const filtered = expenses
+    .filter((e) => getMonthKey(e.date) === activeMonth)
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  if (filtered.length === 0) return;
+
+  const profile = getProfile();
+  const header = "Date,Description,Category,Amount";
+  const rows = filtered.map(
+    (e) => `${e.date},"${e.description.replace(/"/g, '""')}",${e.category},${e.amount.toFixed(2)}`
+  );
+
+  const csv = [header, ...rows].join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const filename = `${profile.name}_${profile.surname}_Expenses_${activeMonth}.csv`;
+  saveAs(blob, filename);
+});
+
+// ── DOCX Export ─────────────────────────────────────────────
+
+exportDocxBtn.addEventListener("click", () => {
+  const filtered = expenses
+    .filter((e) => getMonthKey(e.date) === activeMonth)
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  if (filtered.length === 0) return;
+
+  const profile = getProfile();
+  const monthLabel = getMonthLabel(activeMonth);
+  const total = filtered.reduce((s, e) => s + e.amount, 0);
+
+  const catTotals = {};
+  filtered.forEach((e) => {
+    catTotals[e.category] = (catTotals[e.category] || 0) + e.amount;
+  });
+  const sortedCats = Object.entries(catTotals).sort((a, b) => b[1] - a[1]);
+
+  // Build HTML-based Word document
+  const html = `
+<html xmlns:o="urn:schemas-microsoft-com:office:office"
+      xmlns:w="urn:schemas-microsoft-com:office:word"
+      xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: Calibri, sans-serif; font-size: 11pt; color: #333; margin: 40px; }
+    h1 { font-size: 18pt; color: #0f3460; margin-bottom: 4px; }
+    h2 { font-size: 14pt; color: #16213e; margin-top: 24px; margin-bottom: 8px; border-bottom: 2px solid #0f3460; padding-bottom: 4px; }
+    .meta { color: #666; font-size: 10pt; margin-bottom: 20px; }
+    .summary-box { background: #f0f2f5; padding: 12px 16px; border-radius: 4px; margin-bottom: 20px; }
+    .summary-box strong { color: #0f3460; font-size: 14pt; }
+    table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    th { background: #0f3460; color: white; padding: 8px 10px; text-align: left; font-size: 10pt; }
+    th.amount { text-align: right; }
+    td { padding: 6px 10px; border-bottom: 1px solid #e5e7eb; font-size: 10pt; }
+    td.amount { text-align: right; font-weight: bold; }
+    tr:nth-child(even) { background: #f9fafb; }
+    .cat-row td { font-weight: bold; }
+    .footer { margin-top: 30px; color: #999; font-size: 9pt; text-align: center; border-top: 1px solid #e5e7eb; padding-top: 10px; }
+  </style>
+</head>
+<body>
+  <h1>Expense Report</h1>
+  <p class="meta">${profile.name} ${profile.surname} &mdash; ${monthLabel}</p>
+
+  <div class="summary-box">
+    Total Expenses: <strong>R${total.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}</strong>
+    &nbsp;&nbsp;|&nbsp;&nbsp; ${filtered.length} transactions
+  </div>
+
+  <h2>Category Breakdown</h2>
+  <table>
+    <tr><th>Category</th><th class="amount">Amount</th><th class="amount">% of Total</th></tr>
+    ${sortedCats.map(([cat, amt]) => `
+    <tr class="cat-row">
+      <td>${cat}</td>
+      <td class="amount">R${amt.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}</td>
+      <td class="amount">${(amt / total * 100).toFixed(1)}%</td>
+    </tr>`).join("")}
+  </table>
+
+  <h2>Transaction Details</h2>
+  <table>
+    <tr><th>Date</th><th>Description</th><th>Category</th><th class="amount">Amount</th></tr>
+    ${filtered.map((e) => `
+    <tr>
+      <td>${formatDate(e.date)}</td>
+      <td>${escapeHtml(e.description)}</td>
+      <td>${e.category}</td>
+      <td class="amount">R${e.amount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}</td>
+    </tr>`).join("")}
+    <tr style="border-top: 2px solid #0f3460; font-weight: bold;">
+      <td colspan="3" style="text-align: right;">Total</td>
+      <td class="amount">R${total.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}</td>
+    </tr>
+  </table>
+
+  <p class="footer">Generated on ${new Date().toLocaleDateString("en-ZA")} &mdash; Expense Tracker</p>
+</body>
+</html>`;
+
+  const blob = new Blob([html], { type: "application/vnd.ms-word;charset=utf-8" });
+  const filename = `${profile.name}_${profile.surname}_Expenses_${activeMonth}.doc`;
+  saveAs(blob, filename);
+});

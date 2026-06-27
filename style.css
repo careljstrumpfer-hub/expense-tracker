@@ -11,15 +11,97 @@ body {
   min-height: 100vh;
 }
 
+/* Login & Setup Screens */
+.screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: linear-gradient(135deg, #0f3460 0%, #16213e 100%);
+}
+
+.login-card {
+  background: #fff;
+  border-radius: 16px;
+  padding: 32px 24px;
+  width: 100%;
+  max-width: 380px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  text-align: center;
+}
+
+.login-card h1 {
+  font-size: 1.6rem;
+  color: #16213e;
+  margin-bottom: 4px;
+}
+
+.login-card .subtitle {
+  color: #6b7280;
+  margin-bottom: 24px;
+  font-size: 0.9rem;
+}
+
+.pin-group {
+  text-align: left;
+  margin-bottom: 14px;
+}
+
+.pin-group label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #6b7280;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.pin-group input {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 1.1rem;
+  text-align: center;
+  letter-spacing: 6px;
+  transition: border-color 0.2s;
+}
+
+.pin-group input[type="text"] {
+  text-align: left;
+  letter-spacing: normal;
+}
+
+.pin-group input:focus {
+  outline: none;
+  border-color: #0f3460;
+}
+
+.error-msg {
+  color: #ef4444;
+  font-size: 0.85rem;
+  margin-top: 10px;
+  min-height: 1.2em;
+}
+
+/* App */
 .app {
   max-width: 720px;
   margin: 0 auto;
   padding: 24px 16px;
+  padding-bottom: 40px;
 }
 
 header {
-  text-align: center;
   margin-bottom: 32px;
+}
+
+.header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
 }
 
 header h1 {
@@ -31,6 +113,22 @@ header h1 {
 .subtitle {
   color: #6b7280;
   margin-top: 4px;
+}
+
+.btn-lock {
+  background: none;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 1.1rem;
+  cursor: pointer;
+  color: #6b7280;
+  transition: all 0.2s;
+}
+
+.btn-lock:hover {
+  border-color: #0f3460;
+  color: #0f3460;
 }
 
 h2 {
@@ -134,66 +232,7 @@ h2 {
   color: #0f3460;
 }
 
-/* Category breakdown */
-.breakdown {
-  background: #fff;
-  border-radius: 12px;
-  padding: 20px;
-  margin-bottom: 20px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-}
-
-.category-bars {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.category-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.category-name {
-  width: 100px;
-  font-size: 0.85rem;
-  font-weight: 500;
-  text-align: right;
-  flex-shrink: 0;
-}
-
-.category-bar-wrapper {
-  flex: 1;
-  background: #f0f2f5;
-  border-radius: 6px;
-  height: 22px;
-  overflow: hidden;
-}
-
-.category-bar {
-  height: 100%;
-  border-radius: 6px;
-  transition: width 0.4s ease;
-  min-width: 2px;
-}
-
-.category-value {
-  width: 80px;
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: #374151;
-  flex-shrink: 0;
-}
-
-.no-breakdown {
-  color: #9ca3af;
-  font-size: 0.9rem;
-  text-align: center;
-  padding: 12px;
-}
-
-/* Import CSV */
+/* Import */
 .import-csv {
   background: #fff;
   border-radius: 12px;
@@ -265,6 +304,7 @@ h2 {
   border: 1px solid #e5e7eb;
   border-radius: 8px;
   margin-bottom: 12px;
+  -webkit-overflow-scrolling: touch;
 }
 
 .import-table {
@@ -302,8 +342,8 @@ h2 {
 
 .import-table input[type="checkbox"] {
   cursor: pointer;
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
 }
 
 .import-table select {
@@ -364,6 +404,65 @@ h2 {
   vertical-align: middle;
 }
 
+/* Category breakdown */
+.breakdown {
+  background: #fff;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.category-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.category-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.category-name {
+  width: 100px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.category-bar-wrapper {
+  flex: 1;
+  background: #f0f2f5;
+  border-radius: 6px;
+  height: 22px;
+  overflow: hidden;
+}
+
+.category-bar {
+  height: 100%;
+  border-radius: 6px;
+  transition: width 0.4s ease;
+  min-width: 2px;
+}
+
+.category-value {
+  width: 80px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #374151;
+  flex-shrink: 0;
+}
+
+.no-breakdown {
+  color: #9ca3af;
+  font-size: 0.9rem;
+  text-align: center;
+  padding: 12px;
+}
+
 /* Expenses list */
 .expenses-list {
   background: #fff;
@@ -386,6 +485,7 @@ h2 {
 .list-controls {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 #filter-month {
@@ -409,6 +509,15 @@ h2 {
 
 .btn-export:hover {
   background: #d1d5db;
+}
+
+.btn-docx {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.btn-docx:hover {
+  background: #bfdbfe;
 }
 
 table {
@@ -483,6 +592,13 @@ tbody tr:hover {
   font-size: 0.9rem;
 }
 
+.loading-msg {
+  text-align: center;
+  color: #6b7280;
+  padding: 12px;
+  font-size: 0.9rem;
+}
+
 /* Responsive */
 @media (max-width: 500px) {
   .form-row {
@@ -528,5 +644,17 @@ tbody tr:hover {
 
   .import-actions {
     flex-direction: column;
+  }
+
+  .login-card {
+    padding: 24px 18px;
+  }
+
+  .app {
+    padding: 16px 12px;
+  }
+
+  header h1 {
+    font-size: 1.4rem;
   }
 }

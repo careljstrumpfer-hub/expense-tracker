@@ -2,15 +2,66 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>Expense Tracker</title>
   <link rel="stylesheet" href="style.css">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0f3460">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 </head>
 <body>
-  <div class="app">
-    <header>
+
+  <!-- Login Screen -->
+  <div id="login-screen" class="screen">
+    <div class="login-card">
       <h1>Expense Tracker</h1>
-      <p class="subtitle">Track your daily and monthly spending</p>
+      <p class="subtitle" id="login-greeting"></p>
+      <div class="pin-group">
+        <label>Enter your PIN</label>
+        <input type="password" id="login-pin" inputmode="numeric" maxlength="8" placeholder="PIN" autocomplete="off">
+      </div>
+      <button class="btn-add" id="login-btn">Unlock</button>
+      <p id="login-error" class="error-msg"></p>
+    </div>
+  </div>
+
+  <!-- Setup Screen -->
+  <div id="setup-screen" class="screen" style="display:none;">
+    <div class="login-card">
+      <h1>Welcome</h1>
+      <p class="subtitle">Set up your personal expense tracker</p>
+      <div class="pin-group">
+        <label>First Name</label>
+        <input type="text" id="setup-name" placeholder="e.g. Carel" required>
+      </div>
+      <div class="pin-group">
+        <label>Surname</label>
+        <input type="text" id="setup-surname" placeholder="e.g. Strumpfer" required>
+      </div>
+      <div class="pin-group">
+        <label>Create a PIN (4-8 digits)</label>
+        <input type="password" id="setup-pin" inputmode="numeric" maxlength="8" placeholder="PIN" autocomplete="off">
+      </div>
+      <div class="pin-group">
+        <label>Confirm PIN</label>
+        <input type="password" id="setup-pin-confirm" inputmode="numeric" maxlength="8" placeholder="Confirm PIN" autocomplete="off">
+      </div>
+      <button class="btn-add" id="setup-btn">Get Started</button>
+      <p id="setup-error" class="error-msg"></p>
+    </div>
+  </div>
+
+  <!-- Main App -->
+  <div id="app-screen" class="app" style="display:none;">
+    <header>
+      <div class="header-row">
+        <div>
+          <h1>Expense Tracker</h1>
+          <p class="subtitle" id="user-greeting"></p>
+        </div>
+        <button class="btn-lock" id="lock-btn" title="Lock">&#128274;</button>
+      </div>
     </header>
 
     <section class="add-expense">
@@ -38,6 +89,8 @@
               <option value="Shopping">Shopping</option>
               <option value="Health">Health</option>
               <option value="Education">Education</option>
+              <option value="Insurance">Insurance</option>
+              <option value="Fees">Fees</option>
               <option value="Other">Other</option>
             </select>
           </div>
@@ -52,15 +105,15 @@
 
     <section class="import-csv">
       <div class="import-header" id="import-toggle">
-        <h2>Import Bank CSV</h2>
+        <h2>Import Statement</h2>
         <span class="toggle-arrow" id="toggle-arrow">&#9662;</span>
       </div>
       <div class="import-body" id="import-body" style="display:none;">
-        <p class="import-hint">Upload a CSV export from your bank (Capitec, FNB, Standard Bank, Nedbank, ABSA, or any CSV with date, description, and amount columns).</p>
+        <p class="import-hint">Upload a CSV or PDF bank statement (Capitec, Standard Bank, FNB, Nedbank, ABSA).</p>
         <div class="form-row">
           <div class="form-group">
-            <label for="csv-file">Select CSV file</label>
-            <input type="file" id="csv-file" accept=".csv,.txt">
+            <label for="import-file">Select CSV or PDF file</label>
+            <input type="file" id="import-file" accept=".csv,.txt,.pdf">
           </div>
         </div>
         <div id="import-preview" style="display:none;">
@@ -112,7 +165,8 @@
         <h2>Expenses</h2>
         <div class="list-controls">
           <select id="filter-month" title="Filter by month"></select>
-          <button class="btn-export" id="export-btn" title="Export to CSV">Export CSV</button>
+          <button class="btn-export" id="export-csv-btn" title="Export CSV">CSV</button>
+          <button class="btn-export btn-docx" id="export-docx-btn" title="Export Word document">DOCX</button>
         </div>
       </div>
       <table id="expenses-table">
@@ -131,6 +185,7 @@
     </section>
   </div>
 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
