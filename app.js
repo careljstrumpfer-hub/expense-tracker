@@ -377,6 +377,43 @@ const scanStatus = document.getElementById("scan-status");
 
 scanBtn.addEventListener("click", () => receiptInput.click());
 
+function preprocessImage(file) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      const maxDim = 2000;
+      let w = img.width, h = img.height;
+      if (w > maxDim || h > maxDim) {
+        const scale = maxDim / Math.max(w, h);
+        w = Math.round(w * scale);
+        h = Math.round(h * scale);
+      }
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, w, h);
+
+      // Convert to grayscale and boost contrast
+      const imageData = ctx.getImageData(0, 0, w, h);
+      const d = imageData.data;
+      for (let i = 0; i < d.length; i += 4) {
+        let gray = 0.299 * d[i] + 0.587 * d[i+1] + 0.114 * d[i+2];
+        // Increase contrast
+        gray = ((gray - 128) * 1.8) + 128;
+        gray = Math.max(0, Math.min(255, gray));
+        // Threshold to black/white for cleaner OCR
+        gray = gray > 140 ? 255 : 0;
+        d[i] = d[i+1] = d[i+2] = gray;
+      }
+      ctx.putImageData(imageData, 0, 0);
+
+      canvas.toBlob((blob) => resolve(blob), "image/png");
+    };
+    img.src = URL.createObjectURL(file);
+  });
+}
+
 receiptInput.addEventListener("change", async (e) => {
   const file = e.target.files[0];
   if (!file) return;
@@ -384,14 +421,19 @@ receiptInput.addEventListener("change", async (e) => {
   scanBtn.disabled = true;
   scanStatus.style.display = "block";
   scanStatus.className = "scan-status scan-progress";
-  scanStatus.innerHTML = 'Reading receipt...<div class="scan-progress-bar"><div class="scan-progress-fill" id="scan-fill" style="width:10%"></div></div>';
+  scanStatus.innerHTML = 'Enhancing image...<div class="scan-progress-bar"><div class="scan-progress-fill" id="scan-fill" style="width:5%"></div></div>';
 
   try {
-    const result = await Tesseract.recognize(file, "eng", {
+    const processed = await preprocessImage(file);
+
+    const fill = document.getElementById("scan-fill");
+    if (fill) fill.style.width = "15%";
+    scanStatus.querySelector(".scan-progress").textContent = "Reading text...";
+
+    const result = await Tesseract.recognize(processed, "eng", {
       logger: (m) => {
-        if (m.status === "recognizing text") {
-          const fill = document.getElementById("scan-fill");
-          if (fill) fill.style.width = Math.round(m.progress * 100) + "%";
+        if (m.status === "recognizing text" && fill) {
+          fill.style.width = (15 + Math.round(m.progress * 80)) + "%";
         }
       },
     });
@@ -399,30 +441,36 @@ receiptInput.addEventListener("change", async (e) => {
     const text = result.data.text;
     const parsed = parseReceipt(text);
 
-    if (parsed.amount) {
-      amountInput.value = parsed.amount.toFixed(2);
-    }
-    if (parsed.description) {
-      descInput.value = parsed.description;
-    }
-    if (parsed.date) {
-      dateInput.value = parsed.date;
-    }
-    if (parsed.category) {
-      categoryInput.value = parsed.category;
-    }
+    if (parsed.amount) amountInput.value = parsed.amount.toFixed(2);
+    if (parsed.description) descInput.value = parsed.description;
+    if (parsed.date) dateInput.value = parsed.date;
+    if (parsed.category) categoryInput.value = parsed.category;
 
     const found = [];
     if (parsed.description) found.push("store");
-    if (parsed.amount) found.push("amount");
+    if (parsed.amount) found.push("R" + parsed.amount.toFixed(2));
     if (parsed.date) found.push("date");
 
     if (found.length > 0) {
       scanStatus.className = "scan-status scan-success";
-      scanStatus.textContent = `Found ${found.join(", ")} — review and tap Add Expense.`;
+      scanStatus.innerHTML = `Found: ${found.join(", ")} — review and tap Add Expense.` +
+        `<br><a href="#" class="scan-raw-link" id="show-raw">Show scanned text</a>` +
+        `<pre class="scan-raw" id="raw-text" style="display:none">${escapeHtml(text)}</pre>`;
+      document.getElementById("show-raw").addEventListener("click", (ev) => {
+        ev.preventDefault();
+        const raw = document.getElementById("raw-text");
+        raw.style.display = raw.style.display === "none" ? "block" : "none";
+      });
     } else {
       scanStatus.className = "scan-status scan-error";
-      scanStatus.textContent = "Couldn't read the receipt clearly. Try a clearer photo or enter manually.";
+      scanStatus.innerHTML = `Couldn't read clearly. Try better lighting or a flatter angle.` +
+        `<br><a href="#" class="scan-raw-link" id="show-raw">Show scanned text</a>` +
+        `<pre class="scan-raw" id="raw-text" style="display:none">${escapeHtml(text)}</pre>`;
+      document.getElementById("show-raw").addEventListener("click", (ev) => {
+        ev.preventDefault();
+        const raw = document.getElementById("raw-text");
+        raw.style.display = raw.style.display === "none" ? "block" : "none";
+      });
     }
   } catch (err) {
     scanStatus.className = "scan-status scan-error";
@@ -431,69 +479,123 @@ receiptInput.addEventListener("change", async (e) => {
 
   scanBtn.disabled = false;
   receiptInput.value = "";
-  setTimeout(() => { scanStatus.style.display = "none"; }, 8000);
 });
 
+const KNOWN_STORES = [
+  "spar", "shoprite", "checkers", "pick n pay", "woolworths", "pnp",
+  "kfc", "mcdonalds", "steers", "nandos", "wimpy", "ocean basket",
+  "debonairs", "roman", "hungry lion", "fishaways", "galito", "burger king",
+  "engen", "shell", "caltex", "sasol", "bp",
+  "clicks", "dischem", "dis-chem",
+  "takealot", "mr price", "ackermans", "pep", "jet", "edgars",
+  "foschini", "truworths", "cotton on",
+  "game", "makro", "builders", "cashbuild",
+  "netflix", "dstv", "vodacom", "mtn", "telkom",
+  "panarottis", "spur", "rocomamas", "vida e caffe", "vida",
+  "total", "ok foods", "ok express",
+];
+
 function parseReceipt(text) {
+  const fullText = text.toLowerCase();
   const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
   const result = { description: null, amount: null, date: null, category: null };
 
-  // Find store name — usually one of the first non-empty lines with letters
-  for (const line of lines.slice(0, 8)) {
-    const cleaned = line.replace(/[^a-zA-Z\s]/g, "").trim();
-    if (cleaned.length >= 3 && cleaned.length <= 40 && /[a-zA-Z]{3,}/.test(cleaned)) {
-      result.description = cleaned.split(/\s+/).map((w) =>
-        w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()
+  // 1. Find store name — check known stores first, then fall back to first readable line
+  for (const store of KNOWN_STORES) {
+    if (fullText.includes(store)) {
+      result.description = store.split(/\s+/).map((w) =>
+        w.charAt(0).toUpperCase() + w.slice(1)
       ).join(" ");
       break;
     }
   }
 
-  // Find total amount — look for "total" keyword near a number
-  const totalPatterns = [
-    /(?:total|totaal|amount\s*due|balance\s*due|nett|grand\s*total|te\s*betaal)[:\s]*R?\s*(\d[\d\s,]*\.\d{2})/i,
-    /R?\s*(\d[\d\s,]*\.\d{2})\s*(?:total|totaal)/i,
+  if (!result.description) {
+    for (const line of lines.slice(0, 10)) {
+      const cleaned = line.replace(/[^a-zA-Z\s&'-]/g, "").trim();
+      if (cleaned.length >= 3 && cleaned.length <= 50 && /[a-zA-Z]{2,}/.test(cleaned)) {
+        // Skip common non-store lines
+        if (/^(tax|vat|invoice|receipt|date|time|cashier|tel|phone|cash|change|card|visa|master)/i.test(cleaned)) continue;
+        result.description = cleaned.split(/\s+/).map((w) =>
+          w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()
+        ).join(" ");
+        break;
+      }
+    }
+  }
+
+  // 2. Find total amount — many patterns for SA receipts
+  // OCR often misreads R as P, 0 as O, etc, so be flexible
+  const totalKeywords = [
+    "total", "totaal", "amount due", "balance due", "nett total",
+    "grand total", "te betaal", "amount payable", "bedrag",
+    "tot incl", "total incl", "total due", "totale",
+    "rounding", // sometimes the total is near rounding line
   ];
 
-  for (const pat of totalPatterns) {
-    const m = text.match(pat);
-    if (m) {
-      result.amount = parseFloat(m[1].replace(/[\s,]/g, ""));
-      break;
+  // Search each line for a total keyword + amount
+  for (const line of lines) {
+    const lineLower = line.toLowerCase();
+    // Skip subtotal/sub-total lines
+    if (lineLower.includes("sub") && lineLower.includes("total")) continue;
+
+    for (const kw of totalKeywords) {
+      if (!lineLower.includes(kw)) continue;
+
+      // Find amounts on this line (handle R, spaces, commas in amounts)
+      const amts = [...line.matchAll(/R?\s*(\d[\d\s,.]*\d)\s*$/g),
+                     ...line.matchAll(/R\s*(\d[\d\s,.]*\d)/g),
+                     ...line.matchAll(/(\d[\d\s,]*\.\s*\d{2})/g)];
+
+      for (const m of amts) {
+        const val = parseFloat(m[1].replace(/[\s,]/g, ""));
+        if (val > 0 && val < 100000) {
+          result.amount = val;
+          break;
+        }
+      }
+      if (result.amount) break;
     }
+    if (result.amount) break;
   }
 
-  // Fallback: find the largest amount on the receipt
+  // 3. If no total keyword found, find amounts on lines with "total"-like context
   if (!result.amount) {
-    const amtRegex = /R?\s*(\d[\d\s,]*\.\d{2})/g;
-    let maxAmt = 0;
-    let match;
-    while ((match = amtRegex.exec(text)) !== null) {
-      const val = parseFloat(match[1].replace(/[\s,]/g, ""));
-      if (val > maxAmt && val < 100000) maxAmt = val;
+    const allAmounts = [];
+    for (const line of lines) {
+      const matches = [...line.matchAll(/R?\s*(\d{1,3}[\s,]?\d{0,3}[.,]\s?\d{2})\b/g)];
+      for (const m of matches) {
+        const val = parseFloat(m[1].replace(/[\s,]/g, "").replace(/,(\d{2})$/, ".$1"));
+        if (val > 0 && val < 100000) allAmounts.push(val);
+      }
     }
-    if (maxAmt > 0) result.amount = maxAmt;
+
+    if (allAmounts.length > 0) {
+      // The total is typically the largest amount, or the last large amount
+      allAmounts.sort((a, b) => b - a);
+      result.amount = allAmounts[0];
+    }
   }
 
-  // Find date
+  // 4. Find date — flexible patterns
   const datePatterns = [
-    /(\d{2})[\/\-](\d{2})[\/\-](\d{4})/,   // DD/MM/YYYY
-    /(\d{4})[\/\-](\d{2})[\/\-](\d{2})/,   // YYYY/MM/DD
-    /(\d{2})\s(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*\s(\d{4})/i,
+    /(\d{2})[\/\-.](\d{2})[\/\-.](\d{4})/,          // DD/MM/YYYY
+    /(\d{4})[\/\-.](\d{2})[\/\-.](\d{2})/,          // YYYY/MM/DD
+    /(\d{2})\s*(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*\s*(\d{4})/i,
+    /(\d{2})\s*(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*\s*(\d{2})\b/i,
   ];
 
   for (const pat of datePatterns) {
     const m = text.match(pat);
     if (m) {
-      result.date = parseDate(m[0]);
-      break;
+      const parsed = parseDate(m[0]);
+      if (parsed) { result.date = parsed; break; }
     }
   }
 
-  // Auto-categorize from store name
-  if (result.description) {
-    result.category = categorizeDescription(result.description);
-  }
+  // 5. Auto-categorize
+  const catSource = (result.description || "") + " " + text.slice(0, 200);
+  result.category = categorizeDescription(catSource);
 
   return result;
 }
