@@ -207,7 +207,39 @@
     </section>
   </div>
 
+  <!-- Install Banner -->
+  <div id="install-banner" class="install-banner" style="display:none;">
+    <span>Install this app on your phone for quick access</span>
+    <button id="install-btn" class="btn-install">Install</button>
+    <button id="install-dismiss" class="btn-dismiss">&times;</button>
+  </div>
+
   <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
   <script src="app.js"></script>
+  <script>
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("./sw.js");
+    }
+
+    let deferredPrompt;
+    window.addEventListener("beforeinstallprompt", (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      document.getElementById("install-banner").style.display = "flex";
+    });
+
+    document.getElementById("install-btn").addEventListener("click", () => {
+      if (!deferredPrompt) return;
+      deferredPrompt.prompt();
+      deferredPrompt.userChoice.then(() => {
+        deferredPrompt = null;
+        document.getElementById("install-banner").style.display = "none";
+      });
+    });
+
+    document.getElementById("install-dismiss").addEventListener("click", () => {
+      document.getElementById("install-banner").style.display = "none";
+    });
+  </script>
 </body>
 </html>
