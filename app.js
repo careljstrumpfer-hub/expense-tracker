@@ -187,6 +187,11 @@ const filterMonth = document.getElementById("filter-month");
 const exportCsvBtn = document.getElementById("export-csv-btn");
 const exportDocxBtn = document.getElementById("export-docx-btn");
 const categoryBreakdown = document.getElementById("category-breakdown");
+const filterSource = document.getElementById("filter-source");
+const listActions = document.getElementById("list-actions");
+const selectedInfo = document.getElementById("selected-info");
+const deleteFilteredBtn = document.getElementById("delete-filtered-btn");
+let activeSource = "all";
 
 function updateSummary() {
   const today = getToday();
@@ -252,18 +257,52 @@ function updateCategoryBreakdown() {
     .join("");
 }
 
-function renderExpenses() {
-  const filtered = expenses
+function getSourceClass(source) {
+  if (!source || source === "Added manually") return "source-manual";
+  const s = source.toLowerCase();
+  if (s.includes("capitec")) return "source-capitec";
+  if (s.includes("standard")) return "source-standardbank";
+  return "source-other";
+}
+
+function getSourceLabel(source) {
+  if (!source) return "Manual";
+  if (source === "Added manually") return "Manual";
+  return source;
+}
+
+function updateSourceFilter() {
+  const sources = [...new Set(expenses.map((e) => e.source || "Added manually"))];
+  const opts = ['<option value="all">All sources</option>'];
+  sources.sort().forEach((s) => {
+    opts.push(`<option value="${s}" ${s === activeSource ? "selected" : ""}>${getSourceLabel(s)}</option>`);
+  });
+  filterSource.innerHTML = opts.join("");
+}
+
+function getFilteredExpenses() {
+  return expenses
     .filter((e) => getMonthKey(e.date) === activeMonth)
+    .filter((e) => activeSource === "all" || (e.source || "Added manually") === activeSource)
     .sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
+}
+
+function renderExpenses() {
+  const filtered = getFilteredExpenses();
 
   if (filtered.length === 0) {
     expensesBody.innerHTML = "";
     noExpenses.style.display = "block";
+    listActions.style.display = "none";
     return;
   }
 
   noExpenses.style.display = "none";
+
+  const total = filtered.reduce((s, e) => s + e.amount, 0);
+  listActions.style.display = "flex";
+  selectedInfo.textContent = `${filtered.length} expenses — ${formatCurrency(total)}`;
+
   expensesBody.innerHTML = filtered
     .map(
       (e) => `
@@ -271,6 +310,7 @@ function renderExpenses() {
       <td class="expense-date">${formatDate(e.date)}</td>
       <td>${escapeHtml(e.description)}</td>
       <td><span class="category-tag" style="background: ${CATEGORY_COLORS[e.category] || "#6b7280"}20; color: ${CATEGORY_COLORS[e.category] || "#6b7280"}">${e.category}</span></td>
+      <td><span class="source-tag ${getSourceClass(e.source)}">${getSourceLabel(e.source)}</span></td>
       <td class="expense-amount">${formatCurrency(e.amount)}</td>
       <td><button class="btn-delete" data-id="${e.id}" title="Delete">&times;</button></td>
     </tr>`
@@ -282,6 +322,7 @@ function refresh() {
   saveExpenses(expenses);
   updateSummary();
   updateMonthFilter();
+  updateSourceFilter();
   updateCategoryBreakdown();
   renderExpenses();
 }
@@ -294,6 +335,7 @@ form.addEventListener("submit", (e) => {
     amount: parseFloat(amountInput.value),
     category: categoryInput.value,
     date: dateInput.value,
+    source: "Added manually",
   });
   activeMonth = getMonthKey(dateInput.value);
   refresh();
@@ -314,6 +356,24 @@ filterMonth.addEventListener("change", () => {
   activeMonth = filterMonth.value;
   updateCategoryBreakdown();
   renderExpenses();
+});
+
+filterSource.addEventListener("change", () => {
+  activeSource = filterSource.value;
+  renderExpenses();
+});
+
+deleteFilteredBtn.addEventListener("click", () => {
+  const filtered = getFilteredExpenses();
+  if (filtered.length === 0) return;
+
+  const label = activeSource === "all" ? "all shown" : getSourceLabel(activeSource);
+  if (!confirm(`Delete ${filtered.length} expenses from "${label}"?`)) return;
+
+  const idsToDelete = new Set(filtered.map((e) => e.id));
+  expenses = expenses.filter((e) => !idsToDelete.has(e.id));
+  activeSource = "all";
+  refresh();
 });
 
 // ── Category Keywords ───────────────────────────────────────
@@ -721,11 +781,20 @@ importToggle.addEventListener("click", () => {
   toggleArrow.classList.toggle("open", !visible);
 });
 
+let importSourceName = "";
+
 importFileInput.addEventListener("change", async (e) => {
   const file = e.target.files[0];
   if (!file) return;
 
   const isPdf = file.name.toLowerCase().endsWith(".pdf");
+  const fname = file.name.toLowerCase();
+  if (fname.includes("sbsa") || fname.includes("standard")) importSourceName = "Standard Bank";
+  else if (fname.includes("capitec")) importSourceName = "Capitec";
+  else if (fname.includes("fnb") || fname.includes("first national")) importSourceName = "FNB";
+  else if (fname.includes("nedbank")) importSourceName = "Nedbank";
+  else if (fname.includes("absa")) importSourceName = "ABSA";
+  else importSourceName = isPdf ? "PDF import" : "CSV import";
 
   if (isPdf) {
     importStats.innerHTML = '<span class="loading-msg">Reading PDF...</span>';
@@ -818,6 +887,7 @@ importConfirm.addEventListener("click", () => {
       amount: r.amount,
       category: r.category,
       date: r.date,
+      source: importSourceName,
     });
   });
 

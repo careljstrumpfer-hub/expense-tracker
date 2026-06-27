@@ -165,9 +165,14 @@
         <h2>Expenses</h2>
         <div class="list-controls">
           <select id="filter-month" title="Filter by month"></select>
+          <select id="filter-source" title="Filter by source"></select>
           <button class="btn-export" id="export-csv-btn" title="Export CSV">CSV</button>
           <button class="btn-export btn-docx" id="export-docx-btn" title="Export Word document">DOCX</button>
         </div>
+      </div>
+      <div class="list-actions" id="list-actions" style="display:none;">
+        <span id="selected-info"></span>
+        <button class="btn-delete-all" id="delete-filtered-btn">Delete shown expenses</button>
       </div>
       <table id="expenses-table">
         <thead>
@@ -175,6 +180,7 @@
             <th>Date</th>
             <th>Description</th>
             <th>Category</th>
+            <th>Source</th>
             <th class="amount-col">Amount</th>
             <th></th>
           </tr>
