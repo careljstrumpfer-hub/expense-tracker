@@ -358,7 +358,7 @@ function renderExpenses() {
       <td>${escapeHtml(e.description)}</td>
       <td><span class="category-tag" style="background: ${CATEGORY_COLORS[e.category] || "#6b7280"}20; color: ${CATEGORY_COLORS[e.category] || "#6b7280"}">${e.category}</span></td>
       <td><span class="source-tag ${getSourceClass(e.source)}">${getSourceLabel(e.source)}</span></td>
-      <td class="expense-amount">${formatCurrency(e.amount)}</td>
+      <td class="expense-amount">-${formatCurrency(e.amount)}</td>
       <td class="action-btns">
         <button class="btn-move" data-id="${e.id}" data-action="to-income" title="Move to income">&#8594;Inc</button>
         <button class="btn-del-all" data-id="${e.id}" data-desc="${escapeHtml(e.description.slice(0, 30))}" data-action="del-all" title="Delete all like this across months">All</button>
@@ -1653,28 +1653,27 @@ importFileInput.addEventListener("change", async (e) => {
     return;
   }
 
-  // Mark duplicates — check expenses against expenses, income against income
+  // Mark duplicates by date + description (not amount — same item can change value)
   const expenseKeys = new Set(
-    expenses.map((e) => `${e.date}|${e.amount.toFixed(2)}|${e.description.slice(0, 30).toLowerCase()}`)
+    expenses.map((e) => `${e.date}|${e.description.slice(0, 40).toLowerCase()}`)
   );
   const incomeKeys = new Set(
-    income.map((e) => `${e.date}|${e.amount.toFixed(2)}|${e.description.slice(0, 30).toLowerCase()}`)
+    income.map((e) => `${e.date}|${e.description.slice(0, 40).toLowerCase()}`)
   );
   let dupCount = 0;
-  // Also track keys within this import to catch duplicates within the same file
   const seenInImport = new Set();
   importedRows.forEach((r) => {
-    const key = `${r.type || "expense"}|${r.date}|${r.amount.toFixed(2)}|${r.description.slice(0, 30).toLowerCase()}`;
+    const descKey = `${r.date}|${r.description.slice(0, 40).toLowerCase()}`;
+    const typeKey = `${r.type || "expense"}|${descKey}`;
     const existingSet = (r.type === "income") ? incomeKeys : expenseKeys;
-    const checkKey = `${r.date}|${r.amount.toFixed(2)}|${r.description.slice(0, 30).toLowerCase()}`;
-    if (existingSet.has(checkKey) || seenInImport.has(key)) {
+    if (existingSet.has(descKey) || seenInImport.has(typeKey)) {
       r.duplicate = true;
       r.selected = false;
       dupCount++;
     } else {
       r.duplicate = false;
     }
-    seenInImport.add(key);
+    seenInImport.add(typeKey);
   });
 
   importConfirm.style.display = "";
@@ -1717,7 +1716,7 @@ function renderImportPreview(dupCount) {
       <td class="expense-date">${formatDate(r.date)}</td>
       <td class="desc-cell" title="${escapeHtml(r.description)}">${escapeHtml(r.description)}${r.duplicate ? ' <span class="dup-badge">duplicate</span>' : ""}${r.type === "income" ? ' <span class="income-badge">income</span>' : ""}</td>
       <td>${r.type === "income" ? '<span class="category-tag" style="background:#d1fae520;color:#10b981">Income</span>' : `<select class="row-category" data-idx="${i}">${categoryOptions.replace(`value="${r.category}"`, `value="${r.category}" selected`)}</select>${!r.duplicate && r.category !== "Other" ? '<span class="import-badge">auto</span>' : ""}`}</td>
-      <td class="amount-col" style="${r.type === "income" ? "color:#10b981" : ""}">${r.type === "income" ? "+" : ""}${formatCurrency(r.amount)}</td>
+      <td class="amount-col" style="color:${r.type === "income" ? "#10b981" : "#ef4444"}">${r.type === "income" ? "+" : "-"}${formatCurrency(r.amount)}</td>
     </tr>`
     )
     .join("");
@@ -1801,7 +1800,7 @@ exportCsvBtn.addEventListener("click", () => {
   const profile = getProfile();
   const header = "Date,Description,Category,Amount";
   const rows = filtered.map(
-    (e) => `${e.date},"${e.description.replace(/"/g, '""')}",${e.category},${e.amount.toFixed(2)}`
+    (e) => `${e.date},"${e.description.replace(/"/g, '""')}",${e.category},-${e.amount.toFixed(2)}`
   );
 
   const csv = [header, ...rows].join("\n");
@@ -1881,7 +1880,7 @@ exportDocxBtn.addEventListener("click", () => {
       <td>${formatDate(e.date)}</td>
       <td>${escapeHtml(e.description)}</td>
       <td>${e.category}</td>
-      <td class="amount">R${e.amount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}</td>
+      <td class="amount">-R${e.amount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}</td>
     </tr>`).join("")}
     <tr style="border-top: 2px solid #0f3460; font-weight: bold;">
       <td colspan="3" style="text-align: right;">Total</td>

@@ -756,6 +756,7 @@ tbody tr:hover {
   text-align: right;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+  color: #ef4444;
 }
 
 .category-tag {
