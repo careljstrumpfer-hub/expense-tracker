@@ -109,38 +109,53 @@
       </div>
     </section>
 
-    <!-- Dashboard -->
-    <section class="dashboard">
-      <div class="dash-col">
-        <div class="dash-header">
-          <h2 class="dash-title income-color">Income</h2>
-          <div class="dash-export">
-            <button class="btn-xs" id="export-csv-btn">CSV</button>
-            <button class="btn-xs btn-docx" id="export-docx-btn">DOCX</button>
-          </div>
-        </div>
+    <!-- Summary overview -->
+    <section class="overview">
+      <div class="overview-col overview-income">
+        <h3 class="overview-title income-color">Income</h3>
         <div class="period-grid" id="income-periods"></div>
-        <div class="tx-list" id="income-list">
-          <p class="empty-msg" id="no-income">No income this month</p>
-        </div>
       </div>
-      <div class="dash-col">
-        <div class="dash-header">
-          <h2 class="dash-title expense-color">Expenses</h2>
-          <select id="filter-source" class="source-select"><option value="all">All sources</option></select>
-        </div>
+      <div class="overview-col overview-expense">
+        <h3 class="overview-title expense-color">Expenses</h3>
         <div class="period-grid" id="expense-periods"></div>
-        <div id="category-breakdown" class="cat-bars"></div>
-        <div class="tx-list" id="expense-list">
-          <p class="empty-msg" id="no-expenses">No expenses this month</p>
-        </div>
       </div>
+    </section>
+
+    <!-- Category breakdown -->
+    <section class="cat-section">
+      <h3>Spending by Category</h3>
+      <div id="category-breakdown" class="cat-bars"></div>
     </section>
 
     <!-- Insights -->
     <section class="insights-section" id="insights-section" style="display:none;">
       <h2>Spending Insights</h2>
       <div id="insights-content"></div>
+    </section>
+
+    <!-- Detail tabs -->
+    <section class="detail-section">
+      <div class="detail-tabs">
+        <button class="detail-tab active" data-tab="income">Income</button>
+        <button class="detail-tab" data-tab="expenses">Expenses</button>
+      </div>
+      <div class="detail-toolbar">
+        <select id="filter-source" class="source-select"><option value="all">All sources</option></select>
+        <div class="dash-export">
+          <button class="btn-xs" id="export-csv-btn">CSV</button>
+          <button class="btn-xs btn-docx" id="export-docx-btn">DOCX</button>
+        </div>
+      </div>
+      <div class="detail-panel" id="panel-income">
+        <div class="tx-list" id="income-list">
+          <p class="empty-msg" id="no-income">No income this month</p>
+        </div>
+      </div>
+      <div class="detail-panel" id="panel-expenses" style="display:none;">
+        <div class="tx-list" id="expense-list">
+          <p class="empty-msg" id="no-expenses">No expenses this month</p>
+        </div>
+      </div>
     </section>
 
     <!-- Balance -->

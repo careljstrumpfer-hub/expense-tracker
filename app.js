@@ -198,6 +198,16 @@ const insightsSection = document.getElementById("insights-section");
 const insightsContent = document.getElementById("insights-content");
 const importFileInput = document.getElementById("import-file");
 
+// Tab switching
+document.querySelectorAll(".detail-tab").forEach((tab) => {
+  tab.addEventListener("click", () => {
+    document.querySelectorAll(".detail-tab").forEach((t) => t.classList.remove("active"));
+    tab.classList.add("active");
+    document.getElementById("panel-income").style.display = tab.dataset.tab === "income" ? "" : "none";
+    document.getElementById("panel-expenses").style.display = tab.dataset.tab === "expenses" ? "" : "none";
+  });
+});
+
 function initApp() {
   if (appInitialized) return;
   appInitialized = true;
