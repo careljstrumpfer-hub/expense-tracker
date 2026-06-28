@@ -200,8 +200,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
   /* Topbar */
   .topbar{flex-direction:column;align-items:stretch;gap:8px}
   .topbar h1{font-size:1.15rem}
-  .topbar-actions{justify-content:space-between}
-  .month-select{flex:1;font-size:.85rem;padding:10px 12px}
+  .topbar-actions{display:flex;flex-wrap:wrap;gap:8px}
+  .month-select{flex:1;min-width:0;font-size:.85rem;padding:10px 12px}
+  .currency-select{padding:10px 12px;font-size:.85rem}
   .btn-icon{padding:10px 12px}
 
   /* Import - make it big and obvious on mobile */
@@ -244,7 +245,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
   .tx-desc{font-size:.82rem}
   .tx-amt{font-size:.85rem}
   .tx-details{padding:10px 8px}
-  .tx-action-btn{padding:8px 12px;font-size:.78rem}
+  .tx-actions{flex-wrap:wrap}
+  .tx-action-btn{padding:10px 14px;font-size:.82rem;flex:1;min-width:0;text-align:center}
 
   /* Insights */
   .insights-section{padding:14px}
