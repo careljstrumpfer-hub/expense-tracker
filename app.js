@@ -173,7 +173,30 @@ function unlockApp() {
 let expenses = [];
 let income = [];
 let activeMonth = getMonthKey(getToday());
+let activeSource = "all";
 let appInitialized = false;
+
+const form = document.getElementById("expense-form");
+const descInput = document.getElementById("description");
+const amountInput = document.getElementById("amount");
+const categoryInput = document.getElementById("category");
+const dateInput = document.getElementById("date");
+const filterMonth = document.getElementById("filter-month");
+const filterSource = document.getElementById("filter-source");
+const incomePeriods = document.getElementById("income-periods");
+const expensePeriods = document.getElementById("expense-periods");
+const incomeListEl = document.getElementById("income-list");
+const expenseListEl = document.getElementById("expense-list");
+const noIncome = document.getElementById("no-income");
+const noExpenses = document.getElementById("no-expenses");
+const categoryBreakdown = document.getElementById("category-breakdown");
+const balanceAmount = document.getElementById("balance-amount");
+const balanceBar = document.getElementById("balance-bar");
+const exportCsvBtn = document.getElementById("export-csv-btn");
+const exportDocxBtn = document.getElementById("export-docx-btn");
+const insightsSection = document.getElementById("insights-section");
+const insightsContent = document.getElementById("insights-content");
+const importFileInput = document.getElementById("import-file");
 
 function initApp() {
   if (appInitialized) return;
@@ -186,63 +209,35 @@ function initApp() {
   refresh();
 }
 
-const form = document.getElementById("expense-form");
-const descInput = document.getElementById("description");
-const amountInput = document.getElementById("amount");
-const categoryInput = document.getElementById("category");
-const dateInput = document.getElementById("date");
-const dailyAvg = document.getElementById("daily-avg");
-const monthLabel = document.getElementById("month-label");
-const monthTotal = document.getElementById("month-total");
-const monthIncome = document.getElementById("month-income");
-const monthBalance = document.getElementById("month-balance");
-const balanceCard = document.getElementById("balance-card");
-const expensesBody = document.getElementById("expenses-body");
-const noExpenses = document.getElementById("no-expenses");
-const filterMonth = document.getElementById("filter-month");
-const exportCsvBtn = document.getElementById("export-csv-btn");
-const exportDocxBtn = document.getElementById("export-docx-btn");
-const categoryBreakdown = document.getElementById("category-breakdown");
-const filterSource = document.getElementById("filter-source");
-const listActions = document.getElementById("list-actions");
-const selectedInfo = document.getElementById("selected-info");
-const deleteSelectedBtn = document.getElementById("delete-selected-btn");
-const selectAllExpenses = document.getElementById("select-all-expenses");
-const insightsSection = document.getElementById("insights-section");
-const insightsContent = document.getElementById("insights-content");
-const incomeBody = document.getElementById("income-body");
-const noIncome = document.getElementById("no-income");
-const incomeActions = document.getElementById("income-actions");
-const incomeSelectedInfo = document.getElementById("income-selected-info");
-const deleteIncomeBtn = document.getElementById("delete-income-btn");
-const selectAllIncome = document.getElementById("select-all-income");
-let activeSource = "all";
-let selectedIds = new Set();
-let selectedIncomeIds = new Set();
+// ── Period Helpers ──────────────────────────────────────────
 
-function updateSummary() {
-  const monthExpenses = expenses.filter((e) => getMonthKey(e.date) === activeMonth);
-  const monthInc = income.filter((e) => getMonthKey(e.date) === activeMonth);
-
-  const expenseSum = monthExpenses.reduce((s, e) => s + e.amount, 0);
-  const incomeSum = monthInc.reduce((s, e) => s + e.amount, 0);
-  const balance = incomeSum - expenseSum;
-
-  // Daily average: total expenses / number of unique days with expenses
-  const days = new Set(monthExpenses.map((e) => e.date)).size;
-  const avg = days > 0 ? expenseSum / days : 0;
-
-  monthLabel.textContent = getMonthLabel(activeMonth);
-  dailyAvg.textContent = formatCurrency(avg);
-  monthTotal.textContent = formatCurrency(expenseSum);
-  monthIncome.textContent = formatCurrency(incomeSum);
-  monthBalance.textContent = (balance >= 0 ? "" : "-") + formatCurrency(Math.abs(balance));
-
-  balanceCard.className = "summary-card " + (balance >= 0 ? "balance-positive" : "balance-negative");
+function getMonthsAgo(n) {
+  const months = [];
+  const [y, m] = activeMonth.split("-").map(Number);
+  for (let i = 0; i < n; i++) {
+    const d = new Date(y, m - 1 - i, 1);
+    const key = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
+    months.push(key);
+  }
+  return months;
 }
 
+function sumForPeriod(items, months) {
+  const monthSet = new Set(months);
+  return items
+    .filter((e) => monthSet.has(getMonthKey(e.date)))
+    .reduce((s, e) => s + e.amount, 0);
+}
+
+// ── Update Functions ───────────────────────────────────────
+
 function updateMonthFilter() {
-  const months = [...new Set(expenses.map((e) => getMonthKey(e.date)))].sort().reverse();
+  const allMonths = new Set([
+    ...expenses.map((e) => getMonthKey(e.date)),
+    ...income.map((e) => getMonthKey(e.date)),
+  ]);
+
+  const months = [...allMonths].sort().reverse();
 
   if (!months.includes(activeMonth) && months.length > 0) {
     activeMonth = months[0];
@@ -255,6 +250,46 @@ function updateMonthFilter() {
 
   filterMonth.innerHTML = months
     .map((m) => `<option value="${m}" ${m === activeMonth ? "selected" : ""}>${getMonthLabel(m)}</option>`)
+    .join("");
+}
+
+function updateSourceFilter() {
+  const sources = [...new Set(expenses.map((e) => e.source || "Added manually"))];
+  const opts = ['<option value="all">All sources</option>'];
+  sources.sort().forEach((s) => {
+    opts.push(`<option value="${s}" ${s === activeSource ? "selected" : ""}>${getSourceLabel(s)}</option>`);
+  });
+  filterSource.innerHTML = opts.join("");
+}
+
+function updatePeriodSummaries() {
+  const periods = [
+    { label: "Monthly", months: 1 },
+    { label: "3 Months", months: 3 },
+    { label: "6 Months", months: 6 },
+    { label: "Yearly", months: 12 },
+  ];
+
+  incomePeriods.innerHTML = periods
+    .map((p) => {
+      const keys = getMonthsAgo(p.months);
+      const total = sumForPeriod(income, keys);
+      return `<div class="period-card">
+        <span class="period-label">${p.label}</span>
+        <span class="period-amount inc">+${formatCurrency(total)}</span>
+      </div>`;
+    })
+    .join("");
+
+  expensePeriods.innerHTML = periods
+    .map((p) => {
+      const keys = getMonthsAgo(p.months);
+      const total = sumForPeriod(expenses, keys);
+      return `<div class="period-card">
+        <span class="period-label">${p.label}</span>
+        <span class="period-amount exp">-${formatCurrency(total)}</span>
+      </div>`;
+    })
     .join("");
 }
 
@@ -277,16 +312,33 @@ function updateCategoryBreakdown() {
   categoryBreakdown.innerHTML = sorted
     .map(
       ([cat, amount]) => `
-    <div class="category-row">
-      <span class="category-name">${cat}</span>
-      <div class="category-bar-wrapper">
-        <div class="category-bar" style="width: ${(amount / max) * 100}%; background: ${CATEGORY_COLORS[cat] || "#6b7280"}"></div>
+    <div class="cat-row">
+      <span class="cat-name">${cat}</span>
+      <div class="cat-bar-wrap">
+        <div class="cat-bar" style="width: ${(amount / max) * 100}%; background: ${CATEGORY_COLORS[cat] || "#6b7280"}"></div>
       </div>
-      <span class="category-value">${formatCurrency(amount)}</span>
+      <span class="cat-val">${formatCurrency(amount)}</span>
     </div>`
     )
     .join("");
 }
+
+function updateBalance() {
+  const monthInc = income
+    .filter((e) => getMonthKey(e.date) === activeMonth)
+    .reduce((s, e) => s + e.amount, 0);
+  const monthExp = expenses
+    .filter((e) => getMonthKey(e.date) === activeMonth)
+    .reduce((s, e) => s + e.amount, 0);
+  const balance = monthInc - monthExp;
+
+  const sign = balance >= 0 ? "+" : "-";
+  balanceAmount.textContent = sign + formatCurrency(Math.abs(balance));
+  balanceAmount.className = balance >= 0 ? "bal-positive" : "bal-negative";
+  balanceBar.className = "balance-bar " + (balance >= 0 ? "bal-positive" : "bal-negative");
+}
+
+// ── Source Helpers ──────────────────────────────────────────
 
 function getSourceClass(source) {
   if (!source || source === "Added manually") return "source-manual";
@@ -302,14 +354,7 @@ function getSourceLabel(source) {
   return source;
 }
 
-function updateSourceFilter() {
-  const sources = [...new Set(expenses.map((e) => e.source || "Added manually"))];
-  const opts = ['<option value="all">All sources</option>'];
-  sources.sort().forEach((s) => {
-    opts.push(`<option value="${s}" ${s === activeSource ? "selected" : ""}>${getSourceLabel(s)}</option>`);
-  });
-  filterSource.innerHTML = opts.join("");
-}
+// ── Filtered Lists ─────────────────────────────────────────
 
 function getFilteredExpenses() {
   return expenses
@@ -318,72 +363,101 @@ function getFilteredExpenses() {
     .sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
 }
 
-function updateSelectionInfo() {
-  const filtered = getFilteredExpenses();
-  const selCount = filtered.filter((e) => selectedIds.has(e.id)).length;
-  const total = filtered.reduce((s, e) => s + e.amount, 0);
+function getFilteredIncome() {
+  return income
+    .filter((e) => getMonthKey(e.date) === activeMonth)
+    .sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
+}
 
-  if (selCount > 0) {
-    const selTotal = filtered.filter((e) => selectedIds.has(e.id)).reduce((s, e) => s + e.amount, 0);
-    selectedInfo.textContent = `${selCount} of ${filtered.length} selected (${formatCurrency(selTotal)})`;
-    deleteSelectedBtn.style.display = "";
-    deleteSelectedBtn.textContent = `Delete ${selCount} selected`;
+// ── Render Transactions ────────────────────────────────────
+
+function renderTxItem(e, type) {
+  const isExp = type === "expense";
+  const amtClass = isExp ? "exp" : "inc";
+  const amtPrefix = isExp ? "-" : "+";
+  const shortDate = formatDate(e.date).slice(0, 5);
+  const fullDate = formatDate(e.date);
+  const color = CATEGORY_COLORS[e.category] || "#6b7280";
+
+  let actionsHtml = "";
+  if (isExp) {
+    actionsHtml = `
+      <button class="tx-action-btn move" data-id="${e.id}" data-action="to-income">Move to Income</button>
+      <button class="tx-action-btn danger" data-id="${e.id}" data-action="del-all">Delete All Like This</button>
+      <button class="tx-action-btn danger" data-id="${e.id}" data-action="delete">Delete</button>`;
   } else {
-    selectedInfo.textContent = `${filtered.length} expenses — ${formatCurrency(total)}`;
-    deleteSelectedBtn.style.display = "none";
+    actionsHtml = `
+      <button class="tx-action-btn move" data-id="${e.id}" data-action="to-expense">Move to Expenses</button>
+      <button class="tx-action-btn danger" data-id="${e.id}" data-action="del-all-inc">Delete All Like This</button>
+      <button class="tx-action-btn danger" data-id="${e.id}" data-action="delete-inc">Delete</button>`;
   }
 
-  selectAllExpenses.checked = filtered.length > 0 && filtered.every((e) => selectedIds.has(e.id));
+  const categoryRow = isExp
+    ? `<div class="tx-detail-row"><span class="tx-detail-label">Category</span><span class="tx-detail-value"><span class="cat-tag" style="background:${color}20;color:${color}">${e.category}</span></span></div>`
+    : "";
+
+  return `<div class="tx-item" data-id="${e.id}">
+  <div class="tx-compact">
+    <span class="tx-date">${shortDate}</span>
+    <span class="tx-desc">${escapeHtml(e.description)}</span>
+    <span class="tx-amt ${amtClass}">${amtPrefix}${formatCurrency(e.amount)}</span>
+    <span class="tx-expand">▾</span>
+  </div>
+  <div class="tx-details">
+    <div class="tx-detail-row"><span class="tx-detail-label">Description</span><span class="tx-detail-value">${escapeHtml(e.description)}</span></div>
+    ${categoryRow}
+    <div class="tx-detail-row"><span class="tx-detail-label">Date</span><span class="tx-detail-value">${fullDate}</span></div>
+    <div class="tx-detail-row"><span class="tx-detail-label">Amount</span><span class="tx-detail-value">${amtPrefix}${formatCurrency(e.amount)}</span></div>
+    <div class="tx-detail-row"><span class="tx-detail-label">Source</span><span class="tx-detail-value">${getSourceLabel(e.source)}</span></div>
+    <div class="tx-actions">
+      ${actionsHtml}
+    </div>
+  </div>
+</div>`;
 }
 
 function renderExpenses() {
   const filtered = getFilteredExpenses();
 
   if (filtered.length === 0) {
-    expensesBody.innerHTML = "";
+    expenseListEl.innerHTML = "";
     noExpenses.style.display = "block";
-    listActions.style.display = "none";
     return;
   }
 
   noExpenses.style.display = "none";
-  listActions.style.display = "flex";
-
-  expensesBody.innerHTML = filtered
-    .map(
-      (e) => `
-    <tr class="${selectedIds.has(e.id) ? "row-selected" : ""}">
-      <td><input type="checkbox" class="expense-check" data-id="${e.id}" ${selectedIds.has(e.id) ? "checked" : ""}></td>
-      <td class="expense-date">${formatDate(e.date)}</td>
-      <td>${escapeHtml(e.description)}</td>
-      <td><span class="category-tag" style="background: ${CATEGORY_COLORS[e.category] || "#6b7280"}20; color: ${CATEGORY_COLORS[e.category] || "#6b7280"}">${e.category}</span></td>
-      <td><span class="source-tag ${getSourceClass(e.source)}">${getSourceLabel(e.source)}</span></td>
-      <td class="expense-amount">-${formatCurrency(e.amount)}</td>
-      <td class="action-btns">
-        <button class="btn-move" data-id="${e.id}" data-action="to-income" title="Move to income">&#8594;Inc</button>
-        <button class="btn-del-all" data-id="${e.id}" data-desc="${escapeHtml(e.description.slice(0, 30))}" data-action="del-all" title="Delete all like this across months">All</button>
-        <button class="btn-delete" data-id="${e.id}" title="Delete">&times;</button>
-      </td>
-    </tr>`
-    )
-    .join("");
-
-  updateSelectionInfo();
+  expenseListEl.innerHTML = filtered.map((e) => renderTxItem(e, "expense")).join("");
 }
+
+function renderIncome() {
+  const filtered = getFilteredIncome();
+
+  if (filtered.length === 0) {
+    incomeListEl.innerHTML = "";
+    noIncome.style.display = "block";
+    return;
+  }
+
+  noIncome.style.display = "none";
+  incomeListEl.innerHTML = filtered.map((e) => renderTxItem(e, "income")).join("");
+}
+
+// ── Refresh ────────────────────────────────────────────────
 
 function refresh() {
   saveExpenses(expenses);
   saveIncome(income);
-  selectedIds.clear();
-  selectedIncomeIds.clear();
-  updateSummary();
   updateMonthFilter();
   updateSourceFilter();
+  updatePeriodSummaries();
   updateCategoryBreakdown();
+  updateBalance();
   generateInsights();
   renderExpenses();
   renderIncome();
 }
+
+// ── Expense Form ───────────────────────────────────────────
 
 form.addEventListener("submit", (e) => {
   e.preventDefault();
@@ -405,11 +479,6 @@ form.addEventListener("submit", (e) => {
 
 // ── Income Form ─────────────────────────────────────────────
 
-document.getElementById("income-toggle").addEventListener("click", () => {
-  const f = document.getElementById("income-form");
-  f.style.display = f.style.display === "none" ? "block" : "none";
-});
-
 document.getElementById("income-btn").addEventListener("click", () => {
   const desc = document.getElementById("income-desc").value.trim();
   const amt = parseFloat(document.getElementById("income-amount").value);
@@ -426,72 +495,67 @@ document.getElementById("income-btn").addEventListener("click", () => {
   document.getElementById("income-date").value = getToday();
 });
 
-// ── Income List ─────────────────────────────────────────────
+// ── Expandable Transaction Click Handlers ──────────────────
 
-function getFilteredIncome() {
-  return income
-    .filter((e) => getMonthKey(e.date) === activeMonth)
-    .sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
+function handleTxToggle(e) {
+  const compact = e.target.closest(".tx-compact");
+  if (!compact) return;
+  // Don't toggle if clicking an action button
+  if (e.target.closest(".tx-action-btn")) return;
+  const item = compact.closest(".tx-item");
+  if (!item) return;
+  item.classList.toggle("expanded");
 }
 
-function renderIncome() {
-  const filtered = getFilteredIncome();
+function handleExpenseAction(e) {
+  const btn = e.target.closest(".tx-action-btn");
+  if (!btn) return;
 
-  if (filtered.length === 0) {
-    incomeBody.innerHTML = "";
-    noIncome.style.display = "block";
-    incomeActions.style.display = "none";
-    return;
-  }
+  const id = btn.dataset.id;
+  const action = btn.dataset.action;
 
-  noIncome.style.display = "none";
-  incomeActions.style.display = "flex";
-
-  const selCount = filtered.filter((e) => selectedIncomeIds.has(e.id)).length;
-  const total = filtered.reduce((s, e) => s + e.amount, 0);
-
-  if (selCount > 0) {
-    incomeSelectedInfo.textContent = `${selCount} of ${filtered.length} selected`;
-    deleteIncomeBtn.style.display = "";
-    deleteIncomeBtn.textContent = `Delete ${selCount} selected`;
-  } else {
-    incomeSelectedInfo.textContent = `${filtered.length} entries — ${formatCurrency(total)}`;
-    deleteIncomeBtn.style.display = "none";
-  }
-
-  selectAllIncome.checked = filtered.every((e) => selectedIncomeIds.has(e.id));
-
-  incomeBody.innerHTML = filtered
-    .map(
-      (e) => `
-    <tr class="${selectedIncomeIds.has(e.id) ? "row-selected" : ""}">
-      <td><input type="checkbox" class="income-check" data-id="${e.id}" ${selectedIncomeIds.has(e.id) ? "checked" : ""}></td>
-      <td class="expense-date">${formatDate(e.date)}</td>
-      <td>${escapeHtml(e.description)}</td>
-      <td><span class="source-tag ${getSourceClass(e.source)}">${getSourceLabel(e.source)}</span></td>
-      <td class="income-amount-cell">+${formatCurrency(e.amount)}</td>
-      <td class="action-btns">
-        <button class="btn-move" data-id="${e.id}" data-action="to-expense" title="Move to expenses">&#8594;Exp</button>
-        <button class="btn-del-all" data-id="${e.id}" data-action="del-all-inc" title="Delete all like this">All</button>
-        <button class="btn-delete" data-id="${e.id}" data-target="income" title="Delete">&times;</button>
-      </td>
-    </tr>`
-    )
-    .join("");
-}
-
-incomeBody.addEventListener("click", (e) => {
-  const delBtn = e.target.closest(".btn-delete");
-  if (delBtn) {
-    income = income.filter((x) => x.id !== delBtn.dataset.id);
-    selectedIncomeIds.delete(delBtn.dataset.id);
+  if (action === "delete") {
+    expenses = expenses.filter((x) => x.id !== id);
     refresh();
     return;
   }
 
-  const moveBtn = e.target.closest(".btn-move");
-  if (moveBtn) {
-    const id = moveBtn.dataset.id;
+  if (action === "to-income") {
+    const exp = expenses.find((x) => x.id === id);
+    if (!exp) return;
+    income.push({ id: generateId(), description: exp.description, amount: exp.amount, date: exp.date, source: exp.source });
+    expenses = expenses.filter((x) => x.id !== id);
+    refresh();
+    return;
+  }
+
+  if (action === "del-all") {
+    const exp = expenses.find((x) => x.id === id);
+    if (!exp) return;
+    const key = exp.description.slice(0, 30).toLowerCase();
+    const matches = expenses.filter((x) => x.description.slice(0, 30).toLowerCase() === key);
+    if (!confirm(`Delete all ${matches.length} "${exp.description.slice(0, 30)}..." entries across all months?`)) return;
+    const matchIds = new Set(matches.map((x) => x.id));
+    expenses = expenses.filter((x) => !matchIds.has(x.id));
+    refresh();
+    return;
+  }
+}
+
+function handleIncomeAction(e) {
+  const btn = e.target.closest(".tx-action-btn");
+  if (!btn) return;
+
+  const id = btn.dataset.id;
+  const action = btn.dataset.action;
+
+  if (action === "delete-inc") {
+    income = income.filter((x) => x.id !== id);
+    refresh();
+    return;
+  }
+
+  if (action === "to-expense") {
     const inc = income.find((x) => x.id === id);
     if (!inc) return;
     expenses.push({ id: generateId(), description: inc.description, amount: inc.amount, date: inc.date, source: inc.source, category: categorizeDescription(inc.description) });
@@ -500,9 +564,7 @@ incomeBody.addEventListener("click", (e) => {
     return;
   }
 
-  const delAllBtn = e.target.closest(".btn-del-all");
-  if (delAllBtn) {
-    const id = delAllBtn.dataset.id;
+  if (action === "del-all-inc") {
     const inc = income.find((x) => x.id === id);
     if (!inc) return;
     const key = inc.description.slice(0, 30).toLowerCase();
@@ -513,29 +575,33 @@ incomeBody.addEventListener("click", (e) => {
     refresh();
     return;
   }
+}
 
-  const chk = e.target.closest(".income-check");
-  if (chk) {
-    const id = chk.dataset.id;
-    if (chk.checked) selectedIncomeIds.add(id);
-    else selectedIncomeIds.delete(id);
-    chk.closest("tr").classList.toggle("row-selected", chk.checked);
-    renderIncome();
-  }
+expenseListEl.addEventListener("click", (e) => {
+  handleTxToggle(e);
+  handleExpenseAction(e);
 });
 
-selectAllIncome.addEventListener("change", () => {
-  const filtered = getFilteredIncome();
-  if (selectAllIncome.checked) filtered.forEach((e) => selectedIncomeIds.add(e.id));
-  else filtered.forEach((e) => selectedIncomeIds.delete(e.id));
+incomeListEl.addEventListener("click", (e) => {
+  handleTxToggle(e);
+  handleIncomeAction(e);
+});
+
+// ── Filter Event Listeners ─────────────────────────────────
+
+filterMonth.addEventListener("change", () => {
+  activeMonth = filterMonth.value;
+  updatePeriodSummaries();
+  updateCategoryBreakdown();
+  updateBalance();
+  generateInsights();
+  renderExpenses();
   renderIncome();
 });
 
-deleteIncomeBtn.addEventListener("click", () => {
-  if (selectedIncomeIds.size === 0) return;
-  if (!confirm(`Delete ${selectedIncomeIds.size} selected income entries?`)) return;
-  income = income.filter((e) => !selectedIncomeIds.has(e.id));
-  refresh();
+filterSource.addEventListener("change", () => {
+  activeSource = filterSource.value;
+  renderExpenses();
 });
 
 // ── Receipt Scanner ─────────────────────────────────────────
@@ -768,84 +834,6 @@ function parseReceipt(text) {
 
   return result;
 }
-
-expensesBody.addEventListener("click", (e) => {
-  const btn = e.target.closest(".btn-delete");
-  if (btn) {
-    expenses = expenses.filter((exp) => exp.id !== btn.dataset.id);
-    selectedIds.delete(btn.dataset.id);
-    refresh();
-    return;
-  }
-
-  const moveBtn = e.target.closest(".btn-move");
-  if (moveBtn) {
-    const id = moveBtn.dataset.id;
-    const exp = expenses.find((x) => x.id === id);
-    if (!exp) return;
-    income.push({ id: generateId(), description: exp.description, amount: exp.amount, date: exp.date, source: exp.source });
-    expenses = expenses.filter((x) => x.id !== id);
-    refresh();
-    return;
-  }
-
-  const delAllBtn = e.target.closest(".btn-del-all");
-  if (delAllBtn) {
-    const id = delAllBtn.dataset.id;
-    const exp = expenses.find((x) => x.id === id);
-    if (!exp) return;
-    const key = exp.description.slice(0, 30).toLowerCase();
-    const matches = expenses.filter((x) => x.description.slice(0, 30).toLowerCase() === key);
-    if (!confirm(`Delete all ${matches.length} "${exp.description.slice(0, 30)}..." entries across all months?`)) return;
-    const matchIds = new Set(matches.map((x) => x.id));
-    expenses = expenses.filter((x) => !matchIds.has(x.id));
-    refresh();
-    return;
-  }
-
-  const chk = e.target.closest(".expense-check");
-  if (chk) {
-    const id = chk.dataset.id;
-    if (chk.checked) selectedIds.add(id);
-    else selectedIds.delete(id);
-    chk.closest("tr").classList.toggle("row-selected", chk.checked);
-    updateSelectionInfo();
-  }
-});
-
-selectAllExpenses.addEventListener("change", () => {
-  const filtered = getFilteredExpenses();
-  if (selectAllExpenses.checked) {
-    filtered.forEach((e) => selectedIds.add(e.id));
-  } else {
-    filtered.forEach((e) => selectedIds.delete(e.id));
-  }
-  renderExpenses();
-});
-
-deleteSelectedBtn.addEventListener("click", () => {
-  if (selectedIds.size === 0) return;
-  if (!confirm(`Delete ${selectedIds.size} selected expenses?`)) return;
-  expenses = expenses.filter((e) => !selectedIds.has(e.id));
-  refresh();
-});
-
-filterMonth.addEventListener("change", () => {
-  activeMonth = filterMonth.value;
-  selectedIds.clear();
-  selectedIncomeIds.clear();
-  updateSummary();
-  updateCategoryBreakdown();
-  generateInsights();
-  renderExpenses();
-  renderIncome();
-});
-
-filterSource.addEventListener("change", () => {
-  activeSource = filterSource.value;
-  selectedIds.clear();
-  renderExpenses();
-});
 
 // ── Spending Insights ───────────────────────────────────────
 
@@ -1588,10 +1576,6 @@ function processGenericPdf(text) {
 
 // ── Import UI ───────────────────────────────────────────────
 
-const importToggle = document.getElementById("import-toggle");
-const importBodyEl = document.getElementById("import-body");
-const toggleArrow = document.getElementById("toggle-arrow");
-const importFileInput = document.getElementById("import-file");
 const importPreview = document.getElementById("import-preview");
 const importStats = document.getElementById("import-stats");
 const importBodyTable = document.getElementById("import-body-table");
@@ -1600,13 +1584,6 @@ const importCancel = document.getElementById("import-cancel");
 const selectAll = document.getElementById("select-all");
 
 let importedRows = [];
-
-importToggle.addEventListener("click", () => {
-  const visible = importBodyEl.style.display !== "none";
-  importBodyEl.style.display = visible ? "none" : "block";
-  toggleArrow.classList.toggle("open", !visible);
-});
-
 let importSourceName = "";
 
 importFileInput.addEventListener("change", async (e) => {

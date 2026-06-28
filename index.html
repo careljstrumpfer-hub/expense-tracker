@@ -13,259 +13,147 @@
 </head>
 <body>
 
-  <!-- Login Screen -->
+  <!-- Login -->
   <div id="login-screen" class="screen">
     <div class="login-card">
       <h1>Expense Tracker</h1>
       <p class="subtitle" id="login-greeting"></p>
-      <div class="pin-group">
-        <label>Enter your PIN</label>
-        <input type="password" id="login-pin" inputmode="numeric" maxlength="8" placeholder="PIN" autocomplete="off">
-      </div>
-      <button class="btn-add" id="login-btn">Unlock</button>
+      <div class="field"><label>Enter your PIN</label><input type="password" id="login-pin" inputmode="numeric" maxlength="8" placeholder="PIN" autocomplete="off"></div>
+      <button class="btn-primary" id="login-btn">Unlock</button>
       <p id="login-error" class="error-msg"></p>
       <div class="privacy-note">Your data is stored only on this device. Nothing is sent to any server.</div>
     </div>
   </div>
 
-  <!-- Setup Screen -->
+  <!-- Setup -->
   <div id="setup-screen" class="screen" style="display:none;">
     <div class="login-card">
       <h1>Welcome</h1>
       <p class="subtitle">Set up your personal expense tracker</p>
-      <div class="pin-group">
-        <label>First Name</label>
-        <input type="text" id="setup-name" placeholder="e.g. Carel" required>
-      </div>
-      <div class="pin-group">
-        <label>Surname</label>
-        <input type="text" id="setup-surname" placeholder="e.g. Strumpfer" required>
-      </div>
-      <div class="pin-group">
-        <label>Create a PIN (4-8 digits)</label>
-        <input type="password" id="setup-pin" inputmode="numeric" maxlength="8" placeholder="PIN" autocomplete="off">
-      </div>
-      <div class="pin-group">
-        <label>Confirm PIN</label>
-        <input type="password" id="setup-pin-confirm" inputmode="numeric" maxlength="8" placeholder="Confirm PIN" autocomplete="off">
-      </div>
-      <button class="btn-add" id="setup-btn">Get Started</button>
+      <div class="field"><label>First Name</label><input type="text" id="setup-name" placeholder="e.g. Carel" required></div>
+      <div class="field"><label>Surname</label><input type="text" id="setup-surname" placeholder="e.g. Strumpfer" required></div>
+      <div class="field"><label>Create a PIN (4-8 digits)</label><input type="password" id="setup-pin" inputmode="numeric" maxlength="8" placeholder="PIN" autocomplete="off"></div>
+      <div class="field"><label>Confirm PIN</label><input type="password" id="setup-pin-confirm" inputmode="numeric" maxlength="8" placeholder="Confirm PIN" autocomplete="off"></div>
+      <button class="btn-primary" id="setup-btn">Get Started</button>
       <p id="setup-error" class="error-msg"></p>
-      <div class="privacy-box">
-        <div class="privacy-box-title">Your data stays private</div>
-        <ul>
-          <li>All data is stored locally on your device only</li>
-          <li>Nothing is ever sent to a server or shared online</li>
-          <li>Your PIN protects access on this device</li>
-          <li>Clearing browser data will erase your expenses</li>
-        </ul>
-      </div>
+      <div class="privacy-box"><div class="privacy-box-title">Your data stays private</div><ul><li>All data stored locally on your device</li><li>Nothing sent to any server</li><li>PIN protects access</li><li>Clearing browser data erases expenses</li></ul></div>
     </div>
   </div>
 
-  <!-- Main App -->
+  <!-- App -->
   <div id="app-screen" class="app" style="display:none;">
-    <header>
-      <div class="header-row">
-        <div>
-          <h1>Expense Tracker</h1>
-          <p class="subtitle" id="user-greeting"></p>
-        </div>
-        <button class="btn-lock" id="lock-btn" title="Lock">&#128274;</button>
+
+    <!-- Top bar -->
+    <header class="topbar">
+      <div><h1>Expense Tracker</h1><p class="subtitle" id="user-greeting"></p></div>
+      <div class="topbar-actions">
+        <select id="filter-month" class="month-select"></select>
+        <button class="btn-icon" id="lock-btn" title="Lock">&#128274;</button>
       </div>
     </header>
 
-    <section class="add-expense">
-      <h2>Add Expense</h2>
-      <form id="expense-form">
-        <div class="form-row">
-          <div class="form-group">
-            <label for="description">Description</label>
-            <input type="text" id="description" placeholder="e.g. Groceries" required>
-          </div>
-          <div class="form-group">
-            <label for="amount">Amount (R)</label>
-            <input type="number" id="amount" placeholder="0.00" step="0.01" min="0.01" required>
-          </div>
+    <!-- Import hero -->
+    <section class="import-hero" id="import-section">
+      <div class="import-hero-inner">
+        <div class="import-icon">&#128196;</div>
+        <h2>Import Bank Statement</h2>
+        <p>Upload a CSV or PDF from Capitec, Standard Bank, FNB, Nedbank, or ABSA</p>
+        <label class="btn-import-file" for="import-file">Choose File</label>
+        <input type="file" id="import-file" accept=".csv,.txt,.pdf" style="display:none;">
+      </div>
+      <div id="import-preview" style="display:none;">
+        <div id="import-stats" class="import-stats"></div>
+        <div class="import-table-wrap">
+          <table class="import-table">
+            <thead><tr><th><input type="checkbox" id="select-all" checked></th><th>Date</th><th>Description</th><th>Category</th><th class="amt-col">Amount</th></tr></thead>
+            <tbody id="import-body-table"></tbody>
+          </table>
         </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label for="category">Category</label>
-            <select id="category">
-              <option value="Food">Food</option>
-              <option value="Transport">Transport</option>
-              <option value="Housing">Housing</option>
-              <option value="Utilities">Utilities</option>
-              <option value="Entertainment">Entertainment</option>
-              <option value="Shopping">Shopping</option>
-              <option value="Health">Health</option>
-              <option value="Education">Education</option>
-              <option value="Insurance">Insurance</option>
-              <option value="Fees">Fees</option>
-              <option value="Other">Other</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label for="date">Date</label>
-            <input type="date" id="date" required>
-          </div>
+        <div class="import-actions">
+          <button class="btn-primary" id="import-confirm">Import Selected</button>
+          <button class="btn-secondary" id="import-cancel">Cancel</button>
         </div>
-        <div class="form-row">
-          <button type="submit" class="btn-add" style="flex:1;">Add Expense</button>
-          <button type="button" class="btn-scan" id="scan-btn" title="Scan a receipt">Scan Receipt</button>
-        </div>
+      </div>
+    </section>
+
+    <!-- Add manually -->
+    <section class="add-row">
+      <div class="add-card">
+        <h3>Add Expense</h3>
+        <form id="expense-form" class="add-form">
+          <input type="text" id="description" placeholder="Description" required>
+          <input type="number" id="amount" placeholder="Amount (R)" step="0.01" min="0.01" required>
+          <select id="category">
+            <option value="Food">Food</option><option value="Transport">Transport</option><option value="Housing">Housing</option>
+            <option value="Utilities">Utilities</option><option value="Entertainment">Entertainment</option><option value="Shopping">Shopping</option>
+            <option value="Health">Health</option><option value="Education">Education</option><option value="Insurance">Insurance</option>
+            <option value="Fees">Fees</option><option value="Other">Other</option>
+          </select>
+          <input type="date" id="date">
+          <div class="add-btns">
+            <button type="submit" class="btn-primary btn-sm">Add</button>
+            <button type="button" class="btn-scan btn-sm" id="scan-btn">Scan Receipt</button>
+          </div>
+        </form>
         <input type="file" id="receipt-input" accept="image/*" capture="environment" style="display:none;">
         <div id="scan-status" class="scan-status" style="display:none;"></div>
-      </form>
-      <div class="income-toggle" id="income-toggle">+ Add Income</div>
-      <div class="income-form" id="income-form" style="display:none;">
-        <div class="form-row">
-          <div class="form-group">
-            <label for="income-desc">Description</label>
-            <input type="text" id="income-desc" placeholder="e.g. Salary">
-          </div>
-          <div class="form-group">
-            <label for="income-amount">Amount (R)</label>
-            <input type="number" id="income-amount" placeholder="0.00" step="0.01" min="0.01">
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label for="income-date">Date</label>
-            <input type="date" id="income-date">
-          </div>
-          <div class="form-group" style="justify-content:flex-end;">
-            <button type="button" class="btn-income" id="income-btn">Add Income</button>
-          </div>
+      </div>
+      <div class="add-card add-income-card">
+        <h3>Add Income</h3>
+        <div class="add-form">
+          <input type="text" id="income-desc" placeholder="Description">
+          <input type="number" id="income-amount" placeholder="Amount (R)" step="0.01" min="0.01">
+          <input type="date" id="income-date">
+          <button type="button" class="btn-income btn-sm" id="income-btn">Add</button>
         </div>
       </div>
     </section>
 
-    <section class="import-csv">
-      <div class="import-header" id="import-toggle">
-        <h2>Import Statement</h2>
-        <span class="toggle-arrow" id="toggle-arrow">&#9662;</span>
-      </div>
-      <div class="import-body" id="import-body" style="display:none;">
-        <p class="import-hint">Upload a CSV or PDF bank statement (Capitec, Standard Bank, FNB, Nedbank, ABSA).</p>
-        <div class="form-row">
-          <div class="form-group">
-            <label for="import-file">Select CSV or PDF file</label>
-            <input type="file" id="import-file" accept=".csv,.txt,.pdf">
+    <!-- Dashboard -->
+    <section class="dashboard">
+      <div class="dash-col">
+        <div class="dash-header">
+          <h2 class="dash-title income-color">Income</h2>
+          <div class="dash-export">
+            <button class="btn-xs" id="export-csv-btn">CSV</button>
+            <button class="btn-xs btn-docx" id="export-docx-btn">DOCX</button>
           </div>
         </div>
-        <div id="import-preview" style="display:none;">
-          <div class="import-stats" id="import-stats"></div>
-          <div class="import-table-wrap">
-            <table class="import-table">
-              <thead>
-                <tr>
-                  <th><input type="checkbox" id="select-all" checked></th>
-                  <th>Date</th>
-                  <th>Description</th>
-                  <th>Category</th>
-                  <th class="amount-col">Amount</th>
-                </tr>
-              </thead>
-              <tbody id="import-body-table"></tbody>
-            </table>
-          </div>
-          <div class="import-actions">
-            <button class="btn-add" id="import-confirm">Import Selected</button>
-            <button class="btn-cancel" id="import-cancel">Cancel</button>
-          </div>
+        <div class="period-grid" id="income-periods"></div>
+        <div class="tx-list" id="income-list">
+          <p class="empty-msg" id="no-income">No income this month</p>
+        </div>
+      </div>
+      <div class="dash-col">
+        <div class="dash-header">
+          <h2 class="dash-title expense-color">Expenses</h2>
+          <select id="filter-source" class="source-select"><option value="all">All sources</option></select>
+        </div>
+        <div class="period-grid" id="expense-periods"></div>
+        <div id="category-breakdown" class="cat-bars"></div>
+        <div class="tx-list" id="expense-list">
+          <p class="empty-msg" id="no-expenses">No expenses this month</p>
         </div>
       </div>
     </section>
 
-    <section class="summary">
-      <div class="summary-card">
-        <span class="summary-label">Daily Average</span>
-        <span class="summary-amount" id="daily-avg">R0.00</span>
-      </div>
-      <div class="summary-card">
-        <span class="summary-label" id="month-label">This Month</span>
-        <span class="summary-amount" id="month-total">R0.00</span>
-      </div>
-      <div class="summary-card card-income">
-        <span class="summary-label">Income</span>
-        <span class="summary-amount" id="month-income">R0.00</span>
-      </div>
-      <div class="summary-card" id="balance-card">
-        <span class="summary-label">Balance</span>
-        <span class="summary-amount" id="month-balance">R0.00</span>
-      </div>
-    </section>
-
-    <section class="breakdown">
-      <h2>Monthly Breakdown by Category</h2>
-      <div id="category-breakdown" class="category-bars"></div>
-    </section>
-
-    <section class="insights" id="insights-section" style="display:none;">
+    <!-- Insights -->
+    <section class="insights-section" id="insights-section" style="display:none;">
       <h2>Spending Insights</h2>
       <div id="insights-content"></div>
     </section>
 
-    <section class="expenses-list">
-      <div class="list-header">
-        <h2>Expenses</h2>
-        <div class="list-controls">
-          <select id="filter-month" title="Filter by month"></select>
-          <select id="filter-source" title="Filter by source"></select>
-          <button class="btn-export" id="export-csv-btn" title="Export CSV">CSV</button>
-          <button class="btn-export btn-docx" id="export-docx-btn" title="Export Word document">DOCX</button>
-        </div>
-      </div>
-      <div class="list-actions" id="list-actions" style="display:none;">
-        <span id="selected-info"></span>
-        <button class="btn-delete-selected" id="delete-selected-btn" style="display:none;">Delete selected</button>
-      </div>
-      <table id="expenses-table">
-        <thead>
-          <tr>
-            <th><input type="checkbox" id="select-all-expenses" title="Select all"></th>
-            <th>Date</th>
-            <th>Description</th>
-            <th>Category</th>
-            <th>Source</th>
-            <th class="amount-col">Amount</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody id="expenses-body"></tbody>
-      </table>
-      <p id="no-expenses" class="empty-state">No expenses yet. Add one above!</p>
+    <!-- Balance -->
+    <section class="balance-bar" id="balance-bar">
+      <span class="bal-label">Monthly Balance</span>
+      <span class="bal-amount" id="balance-amount">R0.00</span>
     </section>
 
-    <section class="income-list">
-      <div class="list-header">
-        <h2 class="income-heading">Income</h2>
-      </div>
-      <div class="list-actions" id="income-actions" style="display:none;">
-        <span id="income-selected-info"></span>
-        <button class="btn-delete-selected" id="delete-income-btn" style="display:none;">Delete selected</button>
-      </div>
-      <table id="income-table">
-        <thead>
-          <tr>
-            <th><input type="checkbox" id="select-all-income" title="Select all"></th>
-            <th>Date</th>
-            <th>Description</th>
-            <th>Source</th>
-            <th class="amount-col">Amount</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody id="income-body"></tbody>
-      </table>
-      <p id="no-income" class="empty-state">No income recorded for this month.</p>
-    </section>
   </div>
 
-  <!-- Install Banner -->
+  <!-- Install banner -->
   <div id="install-banner" class="install-banner" style="display:none;">
-    <span>Install this app on your phone for quick access</span>
+    <span>Install for quick access</span>
     <button id="install-btn" class="btn-install">Install</button>
     <button id="install-dismiss" class="btn-dismiss">&times;</button>
   </div>
@@ -273,29 +161,11 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
   <script src="app.js"></script>
   <script>
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("./sw.js");
-    }
-
+    if ("serviceWorker" in navigator) navigator.serviceWorker.register("./sw.js");
     let deferredPrompt;
-    window.addEventListener("beforeinstallprompt", (e) => {
-      e.preventDefault();
-      deferredPrompt = e;
-      document.getElementById("install-banner").style.display = "flex";
-    });
-
-    document.getElementById("install-btn").addEventListener("click", () => {
-      if (!deferredPrompt) return;
-      deferredPrompt.prompt();
-      deferredPrompt.userChoice.then(() => {
-        deferredPrompt = null;
-        document.getElementById("install-banner").style.display = "none";
-      });
-    });
-
-    document.getElementById("install-dismiss").addEventListener("click", () => {
-      document.getElementById("install-banner").style.display = "none";
-    });
+    window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); deferredPrompt = e; document.getElementById("install-banner").style.display = "flex"; });
+    document.getElementById("install-btn").addEventListener("click", () => { if (!deferredPrompt) return; deferredPrompt.prompt(); deferredPrompt.userChoice.then(() => { deferredPrompt = null; document.getElementById("install-banner").style.display = "none"; }); });
+    document.getElementById("install-dismiss").addEventListener("click", () => { document.getElementById("install-banner").style.display = "none"; });
   </script>
 </body>
 </html>
