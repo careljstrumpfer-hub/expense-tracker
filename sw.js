@@ -1,4 +1,4 @@
-const CACHE_NAME = "expense-tracker-v17";
+const CACHE_NAME = "expense-tracker-v18";
 const ASSETS = [
   "./",
   "./index.html",
@@ -30,12 +30,15 @@ self.addEventListener("activate", (e) => {
 self.addEventListener("fetch", (e) => {
   e.respondWith(
     caches.match(e.request).then((cached) => {
-      const fetched = fetch(e.request).then((response) => {
-        const clone = response.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(e.request, clone));
+      if (cached) return cached;
+      return fetch(e.request).then((response) => {
+        // Only cache same-origin responses to avoid opaque response quota issues
+        if (response.ok && new URL(e.request.url).origin === self.location.origin) {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(e.request, clone));
+        }
         return response;
       }).catch(() => cached);
-      return cached || fetched;
     })
   );
 });

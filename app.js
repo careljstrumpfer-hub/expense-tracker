@@ -247,9 +247,6 @@ function initCurrencySelector() {
 }
 
 function initApp() {
-  if (appInitialized) return;
-  appInitialized = true;
-
   expenses = loadExpenses();
   income = loadIncome();
 
@@ -258,7 +255,11 @@ function initApp() {
     activeCurrency = CURRENCIES.find((c) => c.code === profile.currency) || CURRENCIES[0];
   }
 
-  initCurrencySelector();
+  if (!appInitialized) {
+    appInitialized = true;
+    initCurrencySelector();
+  }
+
   dateInput.value = getToday();
   document.getElementById("income-date").value = getToday();
   refresh();
@@ -352,7 +353,7 @@ function updateCategoryBreakdown() {
   const monthExpenses = expenses.filter((e) => getMonthKey(e.date) === activeMonth);
 
   if (monthExpenses.length === 0) {
-    categoryBreakdown.innerHTML = '<p class="no-breakdown">No expenses this month</p>';
+    categoryBreakdown.innerHTML = '<p class="empty-msg">No expenses this month</p>';
     return;
   }
 
@@ -389,19 +390,11 @@ function updateBalance() {
 
   const sign = balance >= 0 ? "+" : "-";
   balanceAmount.textContent = sign + formatCurrency(Math.abs(balance));
-  balanceAmount.className = balance >= 0 ? "bal-positive" : "bal-negative";
+  balanceAmount.className = "bal-amount " + (balance >= 0 ? "bal-positive" : "bal-negative");
   balanceBar.className = "balance-bar " + (balance >= 0 ? "bal-positive" : "bal-negative");
 }
 
 // ── Source Helpers ──────────────────────────────────────────
-
-function getSourceClass(source) {
-  if (!source || source === "Added manually") return "source-manual";
-  const s = source.toLowerCase();
-  if (s.includes("capitec")) return "source-capitec";
-  if (s.includes("standard")) return "source-standardbank";
-  return "source-other";
-}
 
 function getSourceLabel(source) {
   if (!source) return "Manual";
@@ -716,7 +709,7 @@ receiptInput.addEventListener("change", async (e) => {
 
     const fill = document.getElementById("scan-fill");
     if (fill) fill.style.width = "15%";
-    scanStatus.querySelector(".scan-progress").textContent = "Reading text...";
+    scanStatus.innerHTML = 'Reading text...<div class="scan-progress-bar"><div class="scan-progress-fill" id="scan-fill" style="width:15%"></div></div>';
 
     const result = await Tesseract.recognize(processed, "eng", {
       logger: (m) => {
@@ -1621,6 +1614,7 @@ function processGenericPdf(text) {
       amount: Math.abs(txAmount),
       category: categorizeDescription(description),
       selected: true,
+      type: "expense",
     });
   }
 
@@ -1704,10 +1698,11 @@ importFileInput.addEventListener("change", async (e) => {
   renderImportPreview(dupCount);
 });
 
-function renderImportPreview(dupCount) {
+function renderImportPreview() {
   importPreview.style.display = "block";
   selectAll.checked = importedRows.every((r) => r.selected);
 
+  const dupCount = importedRows.filter((r) => r.duplicate).length;
   const selected = importedRows.filter((r) => r.selected);
   const selectedCount = selected.length;
   const selExpenses = selected.filter((r) => r.type !== "income");
@@ -1815,21 +1810,30 @@ importCancel.addEventListener("click", () => {
 // ── CSV Export ───────────────────────────────────────────────
 
 exportCsvBtn.addEventListener("click", () => {
-  const filtered = expenses
+  const profile = getProfile();
+  const sym = getCurrencySymbol();
+
+  const expFiltered = expenses
     .filter((e) => getMonthKey(e.date) === activeMonth)
     .sort((a, b) => a.date.localeCompare(b.date));
 
-  if (filtered.length === 0) return;
+  const incFiltered = income
+    .filter((e) => getMonthKey(e.date) === activeMonth)
+    .sort((a, b) => a.date.localeCompare(b.date));
 
-  const profile = getProfile();
-  const header = "Date,Description,Category,Amount";
-  const rows = filtered.map(
-    (e) => `${e.date},"${e.description.replace(/"/g, '""')}",${e.category},-${e.amount.toFixed(2)}`
+  if (expFiltered.length === 0 && incFiltered.length === 0) return;
+
+  const header = "Date,Description,Type,Category,Amount";
+  const expRows = expFiltered.map(
+    (e) => `${e.date},"${e.description.replace(/"/g, '""')}",Expense,${e.category},-${e.amount.toFixed(2)}`
+  );
+  const incRows = incFiltered.map(
+    (e) => `${e.date},"${e.description.replace(/"/g, '""')}",Income,,+${e.amount.toFixed(2)}`
   );
 
-  const csv = [header, ...rows].join("\n");
+  const csv = [header, ...incRows, ...expRows].join("\n");
   const blob = new Blob([csv], { type: "text/csv" });
-  const filename = `${profile.name}_${profile.surname}_Expenses_${activeMonth}.csv`;
+  const filename = `${profile.name}_${profile.surname}_Finances_${activeMonth}.csv`;
   saveAs(blob, filename);
 });
 
@@ -1881,7 +1885,7 @@ exportDocxBtn.addEventListener("click", () => {
   <p class="meta">${profile.name} ${profile.surname} &mdash; ${monthLabel}</p>
 
   <div class="summary-box">
-    Total Expenses: <strong>R${total.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}</strong>
+    Total Expenses: <strong>${formatCurrency(total)}</strong>
     &nbsp;&nbsp;|&nbsp;&nbsp; ${filtered.length} transactions
   </div>
 
@@ -1891,7 +1895,7 @@ exportDocxBtn.addEventListener("click", () => {
     ${sortedCats.map(([cat, amt]) => `
     <tr class="cat-row">
       <td>${cat}</td>
-      <td class="amount">R${amt.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}</td>
+      <td class="amount">${formatCurrency(amt)}</td>
       <td class="amount">${(amt / total * 100).toFixed(1)}%</td>
     </tr>`).join("")}
   </table>
@@ -1904,11 +1908,11 @@ exportDocxBtn.addEventListener("click", () => {
       <td>${formatDate(e.date)}</td>
       <td>${escapeHtml(e.description)}</td>
       <td>${e.category}</td>
-      <td class="amount">-R${e.amount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}</td>
+      <td class="amount">-${formatCurrency(e.amount)}</td>
     </tr>`).join("")}
     <tr style="border-top: 2px solid #0f3460; font-weight: bold;">
       <td colspan="3" style="text-align: right;">Total</td>
-      <td class="amount">R${total.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}</td>
+      <td class="amount">${formatCurrency(total)}</td>
     </tr>
   </table>
 
