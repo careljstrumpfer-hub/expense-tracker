@@ -116,6 +116,34 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+// ── Access Gate ─────────────────────────────────────────────
+
+const ACCESS_HASH = "cb531952d4e721b4001308f5aa3777bdc37e0b144823ddc77ce73a5b31f970ab";
+const ACCESS_KEY = "expense_tracker_access_granted";
+
+async function hashAccess(code) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(code + "expense_tracker_access_v1");
+  const hash = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+const accessScreen = document.getElementById("access-screen");
+
+document.getElementById("access-btn").addEventListener("click", async () => {
+  const code = document.getElementById("access-code").value;
+  const err = document.getElementById("access-error");
+  if (!code) { err.textContent = "Please enter the access code."; return; }
+  const hash = await hashAccess(code);
+  if (hash !== ACCESS_HASH) { err.textContent = "Invalid access code."; document.getElementById("access-code").value = ""; return; }
+  localStorage.setItem(ACCESS_KEY, "true");
+  initAuth();
+});
+
+document.getElementById("access-code").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") document.getElementById("access-btn").click();
+});
+
 // ── Login / Setup ───────────────────────────────────────────
 
 const loginScreen = document.getElementById("login-screen");
@@ -123,13 +151,14 @@ const setupScreen = document.getElementById("setup-screen");
 const appScreen = document.getElementById("app-screen");
 
 function showScreen(screen) {
+  accessScreen.style.display = "none";
   loginScreen.style.display = "none";
   setupScreen.style.display = "none";
   appScreen.style.display = "none";
   screen.style.display = screen === appScreen ? "block" : "flex";
 }
 
-(function initAuth() {
+function initAuth() {
   const profile = getProfile();
   if (!profile) {
     showScreen(setupScreen);
@@ -138,6 +167,15 @@ function showScreen(screen) {
       `Welcome back, ${profile.name}`;
     showScreen(loginScreen);
     document.getElementById("login-pin").focus();
+  }
+}
+
+(function checkAccess() {
+  if (localStorage.getItem(ACCESS_KEY) === "true") {
+    initAuth();
+  } else {
+    showScreen(accessScreen);
+    document.getElementById("access-code").focus();
   }
 })();
 

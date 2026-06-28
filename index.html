@@ -13,6 +13,18 @@
 </head>
 <body>
 
+  <!-- Access Gate -->
+  <div id="access-screen" class="screen" style="display:none;">
+    <div class="login-card">
+      <h1>Expense Tracker</h1>
+      <p class="subtitle">Enter the access code to continue</p>
+      <div class="field"><label>Access Code</label><input type="password" id="access-code" placeholder="Access code" autocomplete="off"></div>
+      <button class="btn-primary" id="access-btn">Enter</button>
+      <p id="access-error" class="error-msg"></p>
+      <div class="privacy-note">This app is invite-only. Ask the owner for the access code.</div>
+    </div>
+  </div>
+
   <!-- Login -->
   <div id="login-screen" class="screen">
     <div class="login-card">
