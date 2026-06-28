@@ -553,11 +553,9 @@ document.getElementById("income-btn").addEventListener("click", () => {
 // ── Expandable Transaction Click Handlers ──────────────────
 
 function handleTxToggle(e) {
-  const compact = e.target.closest(".tx-compact");
-  if (!compact) return;
-  // Don't toggle if clicking an action button
   if (e.target.closest(".tx-action-btn")) return;
-  const item = compact.closest(".tx-item");
+  if (e.target.closest(".tx-details")) return;
+  const item = e.target.closest(".tx-item");
   if (!item) return;
   item.classList.toggle("expanded");
 }
