@@ -79,22 +79,33 @@
 
     <!-- Backup/Restore -->
     <section class="backup-section">
-      <div class="backup-row">
-        <div class="backup-card">
-          <span class="backup-icon">&#128190;</span>
-          <div>
-            <strong>Backup Data</strong>
-            <p>Export all your data to transfer to another device</p>
+      <div class="backup-header" id="backup-toggle">
+        <span class="backup-icon">&#128190;</span>
+        <strong>Backup &amp; Restore</strong>
+        <span class="toggle-arrow" id="backup-arrow">&#9662;</span>
+      </div>
+      <div class="backup-body" id="backup-body" style="display:none;">
+        <div class="backup-export">
+          <h4>Export Data</h4>
+          <div class="export-range">
+            <label class="range-option"><input type="radio" name="export-range" value="all" checked> All data</label>
+            <label class="range-option"><input type="radio" name="export-range" value="current"> Current month only</label>
+            <label class="range-option"><input type="radio" name="export-range" value="custom"> Custom range</label>
           </div>
+          <div class="export-custom" id="export-custom" style="display:none;">
+            <div class="custom-range-row">
+              <div class="field"><label>From</label><select id="export-from"></select></div>
+              <div class="field"><label>To</label><select id="export-to"></select></div>
+            </div>
+          </div>
+          <div class="export-summary" id="export-summary"></div>
           <button class="btn-backup" id="backup-btn">Download Backup</button>
         </div>
-        <div class="backup-card">
-          <span class="backup-icon">&#128259;</span>
-          <div>
-            <strong>Restore Data</strong>
-            <p>Import a backup file to restore your data</p>
-          </div>
-          <label class="btn-restore" for="restore-file">Restore Backup</label>
+        <div class="backup-divider"></div>
+        <div class="backup-restore">
+          <h4>Restore Data</h4>
+          <p class="backup-hint">Import a backup file to restore data on this or another device</p>
+          <label class="btn-restore" for="restore-file">Choose Backup File</label>
           <input type="file" id="restore-file" accept=".json" style="display:none;">
         </div>
       </div>

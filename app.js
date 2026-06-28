@@ -1944,26 +1944,119 @@ exportDocxBtn.addEventListener("click", () => {
 // ── Backup / Restore ──────────────────────────────────────
 
 const backupStatus = document.getElementById("backup-status");
+const backupToggle = document.getElementById("backup-toggle");
+const backupBody = document.getElementById("backup-body");
+const backupArrow = document.getElementById("backup-arrow");
+const exportFrom = document.getElementById("export-from");
+const exportTo = document.getElementById("export-to");
+const exportCustom = document.getElementById("export-custom");
+const exportSummary = document.getElementById("export-summary");
+
+backupToggle.addEventListener("click", () => {
+  const open = backupBody.style.display !== "none";
+  backupBody.style.display = open ? "none" : "block";
+  backupArrow.classList.toggle("open", !open);
+  if (!open) updateExportOptions();
+});
+
+function getAllMonthKeys() {
+  const months = new Set();
+  expenses.forEach((e) => months.add(getMonthKey(e.date)));
+  income.forEach((e) => months.add(getMonthKey(e.date)));
+  return [...months].sort();
+}
+
+function updateExportOptions() {
+  const months = getAllMonthKeys();
+  if (months.length === 0) {
+    exportSummary.textContent = "No data to export.";
+    return;
+  }
+  const opts = months.map((m) => `<option value="${m}">${getMonthLabel(m)}</option>`).join("");
+  exportFrom.innerHTML = opts;
+  exportTo.innerHTML = opts;
+  exportFrom.value = months[0];
+  exportTo.value = months[months.length - 1];
+  updateExportSummary();
+}
+
+function getExportRange() {
+  const selected = document.querySelector('input[name="export-range"]:checked').value;
+  if (selected === "all") return null;
+  if (selected === "current") return { from: activeMonth, to: activeMonth };
+  return { from: exportFrom.value, to: exportTo.value };
+}
+
+function updateExportSummary() {
+  const range = getExportRange();
+  let filteredExp, filteredInc;
+
+  if (!range) {
+    filteredExp = expenses;
+    filteredInc = income;
+  } else {
+    filteredExp = expenses.filter((e) => { const m = getMonthKey(e.date); return m >= range.from && m <= range.to; });
+    filteredInc = income.filter((e) => { const m = getMonthKey(e.date); return m >= range.from && m <= range.to; });
+  }
+
+  const expTotal = filteredExp.reduce((s, e) => s + e.amount, 0);
+  const incTotal = filteredInc.reduce((s, e) => s + e.amount, 0);
+  const label = !range ? "All data" : range.from === range.to ? getMonthLabel(range.from) : `${getMonthLabel(range.from)} to ${getMonthLabel(range.to)}`;
+
+  exportSummary.innerHTML = `<strong>${label}</strong> — ${filteredExp.length} expenses (-${formatCurrency(expTotal)}), ${filteredInc.length} income (+${formatCurrency(incTotal)})`;
+}
+
+document.querySelectorAll('input[name="export-range"]').forEach((r) => {
+  r.addEventListener("change", () => {
+    exportCustom.style.display = r.value === "custom" ? "block" : "none";
+    updateExportSummary();
+  });
+});
+
+exportFrom.addEventListener("change", updateExportSummary);
+exportTo.addEventListener("change", updateExportSummary);
 
 document.getElementById("backup-btn").addEventListener("click", () => {
   const profile = getProfile();
+  const range = getExportRange();
+
+  let filteredExp, filteredInc, rangeLabel;
+  if (!range) {
+    filteredExp = expenses;
+    filteredInc = income;
+    rangeLabel = "All";
+  } else {
+    filteredExp = expenses.filter((e) => { const m = getMonthKey(e.date); return m >= range.from && m <= range.to; });
+    filteredInc = income.filter((e) => { const m = getMonthKey(e.date); return m >= range.from && m <= range.to; });
+    rangeLabel = range.from === range.to ? range.from : `${range.from}_to_${range.to}`;
+  }
+
+  if (filteredExp.length === 0 && filteredInc.length === 0) {
+    backupStatus.style.display = "block";
+    backupStatus.className = "backup-status scan-error";
+    backupStatus.textContent = "No data in the selected range.";
+    setTimeout(() => { backupStatus.style.display = "none"; }, 4000);
+    return;
+  }
+
   const backup = {
     format: "expense-tracker-backup",
     version: 2,
     exportDate: new Date().toISOString(),
+    exportRange: range || "all",
     profile: { name: profile.name, surname: profile.surname, currency: profile.currency || "ZAR" },
-    expenses: expenses,
-    income: income,
+    expenses: filteredExp,
+    income: filteredInc,
   };
 
   const json = JSON.stringify(backup, null, 2);
   const blob = new Blob([json], { type: "application/json" });
-  const filename = `${profile.name}_${profile.surname}_Backup_${getToday()}.json`;
+  const filename = `${profile.name}_${profile.surname}_Backup_${rangeLabel}.json`;
   saveAs(blob, filename);
 
   backupStatus.style.display = "block";
   backupStatus.className = "backup-status scan-success";
-  backupStatus.textContent = `Backup saved — ${expenses.length} expenses, ${income.length} income entries.`;
+  backupStatus.textContent = `Exported ${filteredExp.length} expenses, ${filteredInc.length} income.`;
   setTimeout(() => { backupStatus.style.display = "none"; }, 5000);
 });
 
