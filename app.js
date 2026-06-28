@@ -1637,8 +1637,24 @@ importFileInput.addEventListener("change", async (e) => {
   const file = e.target.files[0];
   if (!file) return;
 
-  const isPdf = file.name.toLowerCase().endsWith(".pdf");
   const fname = file.name.toLowerCase();
+  const isPdf = fname.endsWith(".pdf");
+  const isJson = fname.endsWith(".json");
+
+  // If it's a backup file, trigger the restore flow instead
+  if (isJson) {
+    const text = await file.text();
+    try {
+      const data = JSON.parse(text);
+      if (data.format === "expense-tracker-backup") {
+        document.getElementById("restore-file").files = e.target.files;
+        document.getElementById("restore-file").dispatchEvent(new Event("change"));
+        importFileInput.value = "";
+        return;
+      }
+    } catch (_) {}
+  }
+
   if (fname.includes("sbsa") || fname.includes("standard")) importSourceName = "Standard Bank";
   else if (fname.includes("capitec")) importSourceName = "Capitec";
   else if (fname.includes("fnb") || fname.includes("first national")) importSourceName = "FNB";
@@ -1923,4 +1939,119 @@ exportDocxBtn.addEventListener("click", () => {
   const blob = new Blob([html], { type: "application/vnd.ms-word;charset=utf-8" });
   const filename = `${profile.name}_${profile.surname}_Expenses_${activeMonth}.doc`;
   saveAs(blob, filename);
+});
+
+// ── Backup / Restore ──────────────────────────────────────
+
+const backupStatus = document.getElementById("backup-status");
+
+document.getElementById("backup-btn").addEventListener("click", () => {
+  const profile = getProfile();
+  const backup = {
+    format: "expense-tracker-backup",
+    version: 2,
+    exportDate: new Date().toISOString(),
+    profile: { name: profile.name, surname: profile.surname, currency: profile.currency || "ZAR" },
+    expenses: expenses,
+    income: income,
+  };
+
+  const json = JSON.stringify(backup, null, 2);
+  const blob = new Blob([json], { type: "application/json" });
+  const filename = `${profile.name}_${profile.surname}_Backup_${getToday()}.json`;
+  saveAs(blob, filename);
+
+  backupStatus.style.display = "block";
+  backupStatus.className = "backup-status scan-success";
+  backupStatus.textContent = `Backup saved — ${expenses.length} expenses, ${income.length} income entries.`;
+  setTimeout(() => { backupStatus.style.display = "none"; }, 5000);
+});
+
+document.getElementById("restore-file").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  backupStatus.style.display = "block";
+  backupStatus.className = "backup-status scan-progress";
+  backupStatus.textContent = "Reading backup file...";
+
+  try {
+    const text = await file.text();
+    const data = JSON.parse(text);
+
+    if (!data.format || data.format !== "expense-tracker-backup") {
+      backupStatus.className = "backup-status scan-error";
+      backupStatus.textContent = "This is not a valid backup file.";
+      return;
+    }
+
+    if (!Array.isArray(data.expenses) || !Array.isArray(data.income)) {
+      backupStatus.className = "backup-status scan-error";
+      backupStatus.textContent = "Backup file is corrupted — missing expense or income data.";
+      return;
+    }
+
+    const expCount = data.expenses.length;
+    const incCount = data.income.length;
+
+    const mergeOrReplace = expenses.length > 0 || income.length > 0
+      ? confirm(`You have existing data (${expenses.length} expenses, ${income.length} income).\n\nOK = Merge (add new entries, skip duplicates)\nCancel = Replace (erase current data and restore backup)`)
+      : false;
+
+    if (mergeOrReplace) {
+      // Merge: add only entries that don't already exist (by date + description)
+      const existingExpKeys = new Set(expenses.map((x) => `${x.date}|${x.description.slice(0, 40).toLowerCase()}`));
+      const existingIncKeys = new Set(income.map((x) => `${x.date}|${x.description.slice(0, 40).toLowerCase()}`));
+
+      let addedExp = 0, addedInc = 0, skipped = 0;
+
+      data.expenses.forEach((x) => {
+        const key = `${x.date}|${(x.description || "").slice(0, 40).toLowerCase()}`;
+        if (!existingExpKeys.has(key)) {
+          if (!x.id) x.id = generateId();
+          expenses.push(x);
+          existingExpKeys.add(key);
+          addedExp++;
+        } else { skipped++; }
+      });
+
+      data.income.forEach((x) => {
+        const key = `${x.date}|${(x.description || "").slice(0, 40).toLowerCase()}`;
+        if (!existingIncKeys.has(key)) {
+          if (!x.id) x.id = generateId();
+          income.push(x);
+          existingIncKeys.add(key);
+          addedInc++;
+        } else { skipped++; }
+      });
+
+      refresh();
+      backupStatus.className = "backup-status scan-success";
+      backupStatus.textContent = `Merged: ${addedExp} expenses, ${addedInc} income added. ${skipped} duplicates skipped.`;
+    } else {
+      // Replace: overwrite everything
+      expenses = data.expenses.map((x) => ({ ...x, id: x.id || generateId() }));
+      income = data.income.map((x) => ({ ...x, id: x.id || generateId() }));
+
+      if (data.profile) {
+        const profile = getProfile();
+        if (data.profile.currency) {
+          profile.currency = data.profile.currency;
+          activeCurrency = CURRENCIES.find((c) => c.code === data.profile.currency) || CURRENCIES[0];
+          initCurrencySelector();
+        }
+        saveProfile(profile);
+      }
+
+      refresh();
+      backupStatus.className = "backup-status scan-success";
+      backupStatus.textContent = `Restored: ${expCount} expenses, ${incCount} income entries.`;
+    }
+  } catch (err) {
+    backupStatus.className = "backup-status scan-error";
+    backupStatus.textContent = "Failed to read backup: " + err.message;
+  }
+
+  document.getElementById("restore-file").value = "";
+  setTimeout(() => { backupStatus.style.display = "none"; }, 6000);
 });

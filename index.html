@@ -60,7 +60,7 @@
         <h2>Import Bank Statement</h2>
         <p>Upload a CSV or PDF from Capitec, Standard Bank, FNB, Nedbank, or ABSA</p>
         <label class="btn-import-file" for="import-file">Choose File</label>
-        <input type="file" id="import-file" accept=".csv,.txt,.pdf" style="display:none;">
+        <input type="file" id="import-file" accept=".csv,.txt,.pdf,.json" style="display:none;">
       </div>
       <div id="import-preview" style="display:none;">
         <div id="import-stats" class="import-stats"></div>
@@ -75,6 +75,30 @@
           <button class="btn-secondary" id="import-cancel">Cancel</button>
         </div>
       </div>
+    </section>
+
+    <!-- Backup/Restore -->
+    <section class="backup-section">
+      <div class="backup-row">
+        <div class="backup-card">
+          <span class="backup-icon">&#128190;</span>
+          <div>
+            <strong>Backup Data</strong>
+            <p>Export all your data to transfer to another device</p>
+          </div>
+          <button class="btn-backup" id="backup-btn">Download Backup</button>
+        </div>
+        <div class="backup-card">
+          <span class="backup-icon">&#128259;</span>
+          <div>
+            <strong>Restore Data</strong>
+            <p>Import a backup file to restore your data</p>
+          </div>
+          <label class="btn-restore" for="restore-file">Restore Backup</label>
+          <input type="file" id="restore-file" accept=".json" style="display:none;">
+        </div>
+      </div>
+      <div id="backup-status" class="backup-status" style="display:none;"></div>
     </section>
 
     <!-- Add manually -->
