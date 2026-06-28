@@ -1216,51 +1216,50 @@ function processCSV(text) {
     const description = (cols.descCol !== -1 ? fields[cols.descCol] : "").trim();
     if (!description) continue;
 
-    let amount = 0;
-    if (cols.moneyOutCol !== -1) {
-      const out = parseAmount(fields[cols.moneyOutCol]);
-      if (out) amount += Math.abs(out);
-    }
-    if (cols.feeCol !== -1) {
-      const fee = parseAmount(fields[cols.feeCol]);
-      if (fee) amount += Math.abs(fee);
-    }
-    if (amount === 0 && cols.amountCol !== -1) {
-      const amt = parseAmount(fields[cols.amountCol]);
-      if (amt) amount = Math.abs(amt);
-    }
-    if (amount === 0 && cols.debitCol !== -1) {
-      const deb = parseAmount(fields[cols.debitCol]);
-      if (deb) amount = Math.abs(deb);
-    }
-    // Check for income (Money In)
-    let incomeAmount = 0;
-    if (cols.moneyInCol !== -1) {
-      const inc = parseAmount(fields[cols.moneyInCol]);
-      if (inc) incomeAmount = Math.abs(inc);
-    }
+    // Gather all amounts from the row — sign determines type
+    let moneyOut = 0, moneyIn = 0, fee = 0, singleAmount = null;
+
+    if (cols.moneyOutCol !== -1) { const v = parseAmount(fields[cols.moneyOutCol]); if (v) moneyOut = v; }
+    if (cols.moneyInCol !== -1)  { const v = parseAmount(fields[cols.moneyInCol]);  if (v) moneyIn = v; }
+    if (cols.feeCol !== -1)      { const v = parseAmount(fields[cols.feeCol]);      if (v) fee = v; }
+    if (cols.amountCol !== -1)   { singleAmount = parseAmount(fields[cols.amountCol]); }
+    if (cols.debitCol !== -1 && !singleAmount) { singleAmount = parseAmount(fields[cols.debitCol]); }
 
     const bankCat = cols.categoryCol !== -1 ? (fields[cols.categoryCol] || "").toLowerCase().trim() : "";
     const parentCat = cols.parentCategoryCol !== -1 ? (fields[cols.parentCategoryCol] || "").toLowerCase().trim() : "";
 
-    // Skip transfers
+    // Skip transfers between own accounts
     if (bankCat === "transfer" || parentCat === "transfer") continue;
 
-    // Income row (Money In with no Money Out)
-    if (incomeAmount > 0 && amount === 0) {
-      if (bankCat === "interest") continue;
-      results.push({ date, description, amount: incomeAmount, category: "Income", selected: true, type: "income" });
+    // Sign rule: negative (-) = expense, positive (+) = income
+    // Money Out and Fee are always negative (expenses)
+    // Money In is always positive (income)
+    // Single Amount column: sign tells us the type
+
+    // Income: positive Money In, or positive single amount
+    if (moneyIn > 0 && moneyOut === 0 && fee === 0) {
+      results.push({ date, description, amount: Math.abs(moneyIn), category: "Income", selected: true, type: "income" });
+      continue;
+    }
+    if (singleAmount !== null && singleAmount > 0 && moneyOut === 0) {
+      results.push({ date, description, amount: Math.abs(singleAmount), category: "Income", selected: true, type: "income" });
       continue;
     }
 
-    if (amount === 0) continue;
+    // Expense: negative Money Out, Fee, or negative single amount
+    let expenseTotal = 0;
+    if (moneyOut) expenseTotal += Math.abs(moneyOut);
+    if (fee) expenseTotal += Math.abs(fee);
+    if (expenseTotal === 0 && singleAmount !== null && singleAmount < 0) expenseTotal = Math.abs(singleAmount);
+
+    if (expenseTotal === 0) continue;
 
     let category = null;
     if (cols.categoryCol !== -1) category = mapBankCategory(fields[cols.categoryCol]);
     if (!category && cols.parentCategoryCol !== -1) category = mapBankCategory(fields[cols.parentCategoryCol]);
     if (!category) category = categorizeDescription(description);
 
-    results.push({ date, description, amount, category, selected: true, type: "expense" });
+    results.push({ date, description, amount: expenseTotal, category, selected: true, type: "expense" });
   }
 
   return results;
@@ -1380,9 +1379,9 @@ function processCapitecPdf(text) {
       }
     }
 
-    // Skip transfers and interest
+    // Skip transfers between own accounts
     const catLower = category.toLowerCase();
-    if (catLower === "transfer" || catLower === "interest") continue;
+    if (catLower === "transfer") continue;
 
     let description, amountsStr;
     if (catIndex !== -1) {
@@ -1393,15 +1392,17 @@ function processCapitecPdf(text) {
       amountsStr = afterDate;
     }
 
+    // Sign rule: negative (-) = expense, positive (+) = income
     const amounts = [...amountsStr.matchAll(amtRegex)].map((m) =>
       parseFloat(m[0].replace(/\s/g, ""))
     );
 
-    let totalExpense = 0;
-    let totalIncome = 0;
-    amounts.forEach((a) => {
-      if (a < 0) totalExpense += Math.abs(a);
-      else if (a > 0 && amounts.indexOf(a) < amounts.length - 1 || catLower === "other income") totalIncome += a;
+    // Sum negatives as expenses, positives (except last which is balance) as income
+    let negTotal = 0, posTotal = 0;
+    amounts.forEach((a, idx) => {
+      if (idx === amounts.length - 1) return; // last is balance
+      if (a < 0) negTotal += Math.abs(a);
+      else if (a > 0) posTotal += a;
     });
 
     description = description
@@ -1411,19 +1412,17 @@ function processCapitecPdf(text) {
 
     if (!description) continue;
 
-    // Income row
-    if (catLower === "other income" || (totalIncome > 0 && totalExpense === 0)) {
-      const incAmt = totalIncome > 0 ? totalIncome : (amounts.length > 0 ? Math.abs(amounts[0]) : 0);
-      if (incAmt > 0) {
-        transactions.push({ date, description, amount: incAmt, category: "Income", selected: true, type: "income" });
-      }
+    // Positive = income
+    if (posTotal > 0 && negTotal === 0) {
+      transactions.push({ date, description, amount: posTotal, category: "Income", selected: true, type: "income" });
       continue;
     }
 
-    if (totalExpense === 0) continue;
+    // Negative = expense
+    if (negTotal === 0) continue;
 
     const mappedCat = mapBankCategory(category) || categorizeDescription(description);
-    transactions.push({ date, description, amount: totalExpense, category: mappedCat, selected: true, type: "expense" });
+    transactions.push({ date, description, amount: negTotal, category: mappedCat, selected: true, type: "expense" });
   }
 
   return transactions;
@@ -1511,12 +1510,8 @@ function processStandardBankPdf(text) {
     const absAmount = Math.abs(txAmount);
     if (absAmount === 0) continue;
 
-    // Income (positive amounts)
+    // Sign rule: + is income, - is expense
     if (txAmount > 0) {
-      // Skip non-income items
-      if (descLower.includes("payment of insurance claims") ||
-          descLower.includes("lottery") || descLower.includes("lotto") ||
-          descLower.includes("vas00")) continue;
       transactions.push({
         date, description, amount: absAmount,
         category: "Income", selected: true, type: "income",
