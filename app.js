@@ -62,8 +62,33 @@ function generateId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 }
 
+const CURRENCIES = [
+  { code: "ZAR", symbol: "R", name: "South African Rand" },
+  { code: "USD", symbol: "$", name: "US Dollar" },
+  { code: "EUR", symbol: "€", name: "Euro" },
+  { code: "GBP", symbol: "£", name: "British Pound" },
+  { code: "BWP", symbol: "P", name: "Botswana Pula" },
+  { code: "NAD", symbol: "N$", name: "Namibian Dollar" },
+  { code: "MZN", symbol: "MT", name: "Mozambican Metical" },
+  { code: "KES", symbol: "KSh", name: "Kenyan Shilling" },
+  { code: "NGN", symbol: "₦", name: "Nigerian Naira" },
+  { code: "GHS", symbol: "GH₵", name: "Ghanaian Cedi" },
+  { code: "TZS", symbol: "TSh", name: "Tanzanian Shilling" },
+  { code: "UGX", symbol: "USh", name: "Ugandan Shilling" },
+  { code: "AUD", symbol: "A$", name: "Australian Dollar" },
+  { code: "CAD", symbol: "C$", name: "Canadian Dollar" },
+  { code: "INR", symbol: "₹", name: "Indian Rupee" },
+  { code: "BRL", symbol: "R$", name: "Brazilian Real" },
+];
+
+let activeCurrency = CURRENCIES[0];
+
+function getCurrencySymbol() {
+  return activeCurrency.symbol;
+}
+
 function formatCurrency(amount) {
-  return "R" + Number(amount).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return getCurrencySymbol() + Number(amount).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 }
 
 function formatDate(dateStr) {
@@ -208,12 +233,32 @@ document.querySelectorAll(".detail-tab").forEach((tab) => {
   });
 });
 
+function initCurrencySelector() {
+  const sel = document.getElementById("currency-select");
+  sel.innerHTML = CURRENCIES.map((c) =>
+    `<option value="${c.code}" ${c.code === activeCurrency.code ? "selected" : ""}>${c.symbol} ${c.code}</option>`
+  ).join("");
+  sel.addEventListener("change", () => {
+    activeCurrency = CURRENCIES.find((c) => c.code === sel.value) || CURRENCIES[0];
+    const profile = getProfile();
+    if (profile) { profile.currency = activeCurrency.code; saveProfile(profile); }
+    refresh();
+  });
+}
+
 function initApp() {
   if (appInitialized) return;
   appInitialized = true;
 
   expenses = loadExpenses();
   income = loadIncome();
+
+  const profile = getProfile();
+  if (profile && profile.currency) {
+    activeCurrency = CURRENCIES.find((c) => c.code === profile.currency) || CURRENCIES[0];
+  }
+
+  initCurrencySelector();
   dateInput.value = getToday();
   document.getElementById("income-date").value = getToday();
   refresh();

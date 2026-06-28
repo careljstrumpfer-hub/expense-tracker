@@ -27,6 +27,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 .topbar .subtitle{color:#6b7280;font-size:.82rem}
 .topbar-actions{display:flex;gap:8px;align-items:center}
 .month-select{padding:8px 12px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:.88rem;background:#fff;font-weight:500}
+.currency-select{padding:8px 10px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:.88rem;background:#fff;font-weight:600;width:auto}
 .btn-icon{background:none;border:1.5px solid #e5e7eb;border-radius:8px;padding:7px 10px;font-size:1rem;cursor:pointer;color:#6b7280;transition:all .2s}
 .btn-icon:hover{border-color:#0f3460;color:#0f3460}
 
