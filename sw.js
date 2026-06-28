@@ -1,10 +1,12 @@
-const CACHE_NAME = "expense-tracker-v21";
-const ASSETS = [
+const CACHE_NAME = "expense-tracker-v22";
+const APP_FILES = [
   "./",
   "./index.html",
   "./style.css",
   "./app.js",
   "./manifest.json",
+];
+const CDN_FILES = [
   "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js",
   "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js",
   "https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js",
@@ -13,7 +15,7 @@ const ASSETS = [
 
 self.addEventListener("install", (e) => {
   e.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
+    caches.open(CACHE_NAME).then((cache) => cache.addAll([...APP_FILES, ...CDN_FILES]))
   );
   self.skipWaiting();
 });
@@ -28,17 +30,24 @@ self.addEventListener("activate", (e) => {
 });
 
 self.addEventListener("fetch", (e) => {
-  e.respondWith(
-    caches.match(e.request).then((cached) => {
-      if (cached) return cached;
-      return fetch(e.request).then((response) => {
-        // Only cache same-origin responses to avoid opaque response quota issues
-        if (response.ok && new URL(e.request.url).origin === self.location.origin) {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(e.request, clone));
-        }
+  const url = new URL(e.request.url);
+  const isAppFile = url.origin === self.location.origin;
+
+  if (isAppFile) {
+    // Network-first for app files — always get the latest, fall back to cache offline
+    e.respondWith(
+      fetch(e.request).then((response) => {
+        const clone = response.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(e.request, clone));
         return response;
-      }).catch(() => cached);
-    })
-  );
+      }).catch(() => caches.match(e.request))
+    );
+  } else {
+    // Cache-first for CDN files — they don't change
+    e.respondWith(
+      caches.match(e.request).then((cached) => {
+        return cached || fetch(e.request);
+      })
+    );
+  }
 });
