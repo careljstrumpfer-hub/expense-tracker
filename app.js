@@ -1655,20 +1655,19 @@ importFileInput.addEventListener("change", async (e) => {
   const incomeKeys = new Set(
     income.map((e) => `${e.date}|${e.description.slice(0, 40).toLowerCase()}`)
   );
+  // Only check against previously imported data — never within the same file
+  // (a single statement can have identical-looking transactions that are separate)
   let dupCount = 0;
-  const seenInImport = new Set();
   importedRows.forEach((r) => {
     const descKey = `${r.date}|${r.description.slice(0, 40).toLowerCase()}`;
-    const typeKey = `${r.type || "expense"}|${descKey}`;
     const existingSet = (r.type === "income") ? incomeKeys : expenseKeys;
-    if (existingSet.has(descKey) || seenInImport.has(typeKey)) {
+    if (existingSet.has(descKey)) {
       r.duplicate = true;
       r.selected = false;
       dupCount++;
     } else {
       r.duplicate = false;
     }
-    seenInImport.add(typeKey);
   });
 
   importConfirm.style.display = "";
