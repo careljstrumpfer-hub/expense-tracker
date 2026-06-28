@@ -194,21 +194,71 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 
 /* Responsive */
 @media(max-width:700px){
-  .overview{grid-template-columns:1fr}
-  .add-row{grid-template-columns:1fr}
-  .period-grid{grid-template-columns:repeat(2,1fr)}
-  .topbar{flex-direction:column;align-items:flex-start}
-  .app{padding:10px}
-  .topbar h1{font-size:1.2rem}
-  .import-hero{padding:14px}
-  .import-hero-inner{padding:8px 0}
-  .import-hero h2{font-size:1rem}
-  .overview-col{padding:12px}
-  .cat-section{padding:12px}
-  .detail-section{padding:12px}
-  .tx-compact{padding:6px 2px}
-  .tx-desc{font-size:.8rem}
-  .tx-amt{font-size:.82rem}
-  .period-card{padding:8px 4px}
-  .period-amount{font-size:.85rem}
+  .app{padding:8px;padding-bottom:70px}
+
+  /* Topbar */
+  .topbar{flex-direction:column;align-items:stretch;gap:8px}
+  .topbar h1{font-size:1.15rem}
+  .topbar-actions{justify-content:space-between}
+  .month-select{flex:1;font-size:.85rem;padding:10px 12px}
+  .btn-icon{padding:10px 12px}
+
+  /* Import - make it big and obvious on mobile */
+  .import-hero{padding:20px 16px;margin-bottom:14px;border-width:3px}
+  .import-hero-inner{padding:10px 0}
+  .import-icon{font-size:2rem;margin-bottom:4px}
+  .import-hero h2{font-size:1.1rem}
+  .import-hero p{font-size:.82rem;margin-bottom:12px}
+  .btn-import-file{padding:14px 28px;font-size:1rem;width:100%;text-align:center;display:block}
+
+  /* Add forms stacked */
+  .add-row{grid-template-columns:1fr;gap:10px;margin-bottom:14px}
+  .add-card{padding:14px}
+  .add-form input,.add-form select{padding:12px;font-size:.9rem}
+  .btn-sm{padding:12px 14px;font-size:.88rem}
+
+  /* Overview */
+  .overview{grid-template-columns:1fr;gap:10px;margin-bottom:14px}
+  .overview-col{padding:14px}
+  .overview-title{font-size:.9rem;margin-bottom:8px}
+  .period-grid{grid-template-columns:repeat(2,1fr);gap:6px}
+  .period-card{padding:10px 6px}
+  .period-label{font-size:.6rem}
+  .period-amount{font-size:.88rem}
+
+  /* Category */
+  .cat-section{padding:14px;margin-bottom:14px}
+  .cat-name{width:60px;font-size:.7rem}
+  .cat-val{width:65px;font-size:.7rem}
+
+  /* Detail tabs */
+  .detail-section{padding:10px;margin-bottom:14px}
+  .detail-tab{padding:12px;font-size:.88rem}
+  .detail-toolbar{flex-wrap:wrap;gap:8px}
+  .source-select{flex:1;padding:8px;font-size:.82rem}
+
+  /* Transactions */
+  .tx-compact{padding:10px 4px;gap:6px}
+  .tx-date{font-size:.72rem;width:40px}
+  .tx-desc{font-size:.82rem}
+  .tx-amt{font-size:.85rem}
+  .tx-details{padding:10px 8px}
+  .tx-action-btn{padding:8px 12px;font-size:.78rem}
+
+  /* Insights */
+  .insights-section{padding:14px}
+  .insight-card{padding:10px}
+  .insight-card{font-size:.82rem}
+
+  /* Import preview */
+  .import-table{font-size:.75rem}
+  .import-table td,.import-table th{padding:5px 4px}
+  .desc-cell{max-width:120px}
+  .import-actions{flex-direction:column}
+  .import-actions .btn-primary,.import-actions .btn-secondary{padding:14px}
+
+  /* Balance bar */
+  .balance-bar{padding:10px 16px}
+  .bal-label{font-size:.75rem}
+  .bal-amount{font-size:1.05rem}
 }
