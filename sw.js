@@ -1,9 +1,9 @@
-const CACHE_NAME = "expense-tracker-v24";
+const CACHE_NAME = "expense-tracker-v25";
 const APP_FILES = [
   "./",
   "./index.html",
-  "./style.css",
-  "./app.js",
+  "./style.css?v=24",
+  "./app.js?v=24",
   "./manifest.json",
 ];
 const CDN_FILES = [
