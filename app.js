@@ -418,18 +418,31 @@ function updateCategoryBreakdown() {
 }
 
 function updateBalance() {
-  const monthInc = income
-    .filter((e) => getMonthKey(e.date) === activeMonth)
-    .reduce((s, e) => s + e.amount, 0);
-  const monthExp = expenses
-    .filter((e) => getMonthKey(e.date) === activeMonth)
-    .reduce((s, e) => s + e.amount, 0);
-  const balance = monthInc - monthExp;
+  const balMonth = document.getElementById("balance-month");
+  const balCarryover = document.getElementById("balance-carryover");
 
-  const sign = balance >= 0 ? "+" : "-";
-  balanceAmount.textContent = sign + formatCurrency(Math.abs(balance));
-  balanceAmount.className = "bal-amount " + (balance >= 0 ? "bal-positive" : "bal-negative");
-  balanceBar.className = "balance-bar " + (balance >= 0 ? "bal-positive" : "bal-negative");
+  // This month's balance
+  const monthInc = income.filter((e) => getMonthKey(e.date) === activeMonth).reduce((s, e) => s + e.amount, 0);
+  const monthExp = expenses.filter((e) => getMonthKey(e.date) === activeMonth).reduce((s, e) => s + e.amount, 0);
+  const monthBalance = monthInc - monthExp;
+
+  // Carryover: sum of all months BEFORE the active month
+  const carryInc = income.filter((e) => getMonthKey(e.date) < activeMonth).reduce((s, e) => s + e.amount, 0);
+  const carryExp = expenses.filter((e) => getMonthKey(e.date) < activeMonth).reduce((s, e) => s + e.amount, 0);
+  const carryover = carryInc - carryExp;
+
+  // Total = carryover + this month
+  const total = carryover + monthBalance;
+
+  function formatBal(val, el, cls) {
+    const sign = val >= 0 ? "+" : "-";
+    el.textContent = sign + formatCurrency(Math.abs(val));
+    el.className = cls + " " + (val >= 0 ? "bal-positive" : "bal-negative");
+  }
+
+  formatBal(monthBalance, balMonth, "bal-small-amount");
+  formatBal(carryover, balCarryover, "bal-small-amount");
+  formatBal(total, balanceAmount, "bal-amount");
 }
 
 // ── Source Helpers ──────────────────────────────────────────

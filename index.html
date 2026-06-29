@@ -209,8 +209,20 @@
 
     <!-- Balance -->
     <section class="balance-bar" id="balance-bar">
-      <span class="bal-label">Monthly Balance</span>
-      <span class="bal-amount" id="balance-amount">R0.00</span>
+      <div class="bal-group">
+        <span class="bal-small-label">This Month</span>
+        <span class="bal-small-amount" id="balance-month">R0.00</span>
+      </div>
+      <div class="bal-divider"></div>
+      <div class="bal-group">
+        <span class="bal-small-label">Carry Over</span>
+        <span class="bal-small-amount" id="balance-carryover">R0.00</span>
+      </div>
+      <div class="bal-divider"></div>
+      <div class="bal-group bal-main">
+        <span class="bal-small-label">Total Balance</span>
+        <span class="bal-amount" id="balance-amount">R0.00</span>
+      </div>
     </section>
 
   </div>
