@@ -30,6 +30,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 .currency-select{padding:8px 10px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:.88rem;background:#fff;font-weight:600;width:auto}
 .btn-icon{background:none;border:1.5px solid #e5e7eb;border-radius:8px;padding:7px 10px;font-size:1rem;cursor:pointer;color:#6b7280;transition:all .2s}
 .btn-icon:hover{border-color:#0f3460;color:#0f3460}
+.btn-del-month{color:#ef4444;border-color:#fecaca}
+.btn-del-month:hover{background:#fef2f2;border-color:#ef4444;color:#ef4444}
 
 /* Buttons */
 .btn-primary{width:100%;padding:11px;background:#0f3460;color:#fff;border:none;border-radius:8px;font-size:.95rem;font-weight:600;cursor:pointer;transition:background .2s}

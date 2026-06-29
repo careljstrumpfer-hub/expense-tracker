@@ -688,6 +688,24 @@ filterSource.addEventListener("change", () => {
   renderExpenses();
 });
 
+document.getElementById("delete-month-btn").addEventListener("click", () => {
+  const label = getMonthLabel(activeMonth);
+  const monthExp = expenses.filter((e) => getMonthKey(e.date) === activeMonth);
+  const monthInc = income.filter((e) => getMonthKey(e.date) === activeMonth);
+  const total = monthExp.length + monthInc.length;
+
+  if (total === 0) {
+    alert("No data to delete for " + label + ".");
+    return;
+  }
+
+  if (!confirm(`Delete ALL data for ${label}?\n\n${monthExp.length} expenses and ${monthInc.length} income entries will be permanently removed.\n\nThis cannot be undone.`)) return;
+
+  expenses = expenses.filter((e) => getMonthKey(e.date) !== activeMonth);
+  income = income.filter((e) => getMonthKey(e.date) !== activeMonth);
+  refresh();
+});
+
 // ── Receipt Scanner ─────────────────────────────────────────
 
 const scanBtn = document.getElementById("scan-btn");
